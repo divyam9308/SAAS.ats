@@ -110,3 +110,4 @@ begin
     execute 'create unique index if not exists candidates_normalized_mobile_unique on public.candidates (regexp_replace(coalesce(mobile_number, ''''), ''\D'', '''', ''g'')) where regexp_replace(coalesce(mobile_number, ''''), ''\D'', '''', ''g'') <> '''' and btrim(coalesce(mobile_number, '''')) <> ''-''';
   end if;
 end $$;
+

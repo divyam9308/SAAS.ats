@@ -47,3 +47,4 @@ test('attendance service checks superadmin eligibility before accrual and filter
   assert.ok(ledgerInitializer.indexOf('isSuperAdminProfile') < ledgerInitializer.indexOf("entry_type:'accrual'"))
   assert.match(balanceList, /excludeSuperAdminProfiles[\s\S]*profiles\.map/)
 })
+

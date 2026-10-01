@@ -34,3 +34,4 @@ begin
     raise notice 'Client follow-up duplicate-index check skipped: indexes differ or support a constraint.';
   end if;
 end $$;
+

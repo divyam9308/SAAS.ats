@@ -41,3 +41,4 @@ test('completed attendance is disabled and clock state resets at company midnigh
   assert.match(control, /scheduleMidnightRefresh/)
   assert.match(control, /window\.clearTimeout\(midnightTimer\)/)
 })
+

@@ -208,3 +208,4 @@ revoke all on function public.create_invoice_with_lowest_sequence(jsonb, text) f
 
 grant execute on function public.next_typed_invoice_sequence(text, text, text) to service_role;
 grant execute on function public.create_invoice_with_lowest_sequence(jsonb, text) to service_role;
+

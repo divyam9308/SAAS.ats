@@ -1,0 +1,437 @@
+{
+  "version": 1,
+  "slug": "fyndbridge",
+  "company": {
+    "displayName": "Divyam Aggarwal",
+    "legalName": "Divyam aggarwal ltd",
+    "shortName": "FyndBridge",
+    "atsProductName": "divyam ATS",
+    "tagline": "Bridging Talent & Success",
+    "website": "https://divyam.in",
+    "supportEmail": "partner@divyam.in",
+    "hrEmail": "partner@fyndbridge.in",
+    "phone": "9971731361",
+    "address": {
+      "line1": "Second Floor, House No A-34, Pocket A-8",
+      "line2": "Kalkaji Extension",
+      "city": "New Delhi",
+      "state": "Delhi",
+      "postalCode": "110019",
+      "country": "India"
+    },
+    "timezone": "Asia/Kolkata",
+    "currency": "INR",
+    "locale": "en-IN",
+    "dateFormat": "DD/MM/YYYY",
+    "financialYearStartMonth": 4
+  },
+  "branding": {
+    "primaryColor": "#001264",
+    "secondaryColor": "#1E3A8A",
+    "accentColor": "#C9A227",
+    "navigationStyle": "sidebar",
+    "colorMode": "light",
+    "squareLogo": "/assets/fynd-sidebar-logo.svg",
+    "horizontalLogo": "/assets/fyndbridge-official-logo.svg",
+    "favicon": "/assets/fynd-sidebar-logo.svg",
+    "loginHeadline": "Hiring Is Not A Transaction. It's A Transformation.",
+    "loginSubheading": "Your internal command centre for executive search and talent placement.",
+    "footerText": "Internal use only."
+  },
+  "authentication": {
+    "mode": "domains",
+    "allowedDomains": [
+      "fyndbridge.in"
+    ],
+    "allowedEmails": [],
+    "googleEnabled": true,
+    "passwordEnabled": false
+  },
+  "terminology": {
+    "job": {
+      "singular": "Mandate",
+      "plural": "Mandates"
+    },
+    "consultant": {
+      "singular": "Consultant",
+      "plural": "Consultants"
+    },
+    "client": {
+      "singular": "Client",
+      "plural": "Clients"
+    },
+    "candidate": {
+      "singular": "Candidate",
+      "plural": "Candidates"
+    },
+    "manager": {
+      "singular": "Team Lead",
+      "plural": "Team Leads"
+    },
+    "hiredStage": "Joined"
+  },
+  "modules": {
+    "dashboard": true,
+    "candidates": true,
+    "clients": true,
+    "jobs": true,
+    "applications": true,
+    "publicRoles": true,
+    "reports": true,
+    "attendance": true,
+    "performance": true,
+    "invoices": true,
+    "admin": true,
+    "userManual": true,
+    "aiParsing": true,
+    "notifications": true
+  },
+  "candidate": {
+    "fields": {
+      "fullName": "required",
+      "email": "required",
+      "phone": "required",
+      "city": "optional",
+      "state": "optional",
+      "location": "optional",
+      "designation": "required",
+      "currentCompany": "required",
+      "experience": "required",
+      "noticePeriod": "required",
+      "relocation": "required",
+      "skills": "required",
+      "education": "optional",
+      "cv": "required",
+      "linkedin": "optional",
+      "source": "optional",
+      "salary": "required",
+      "expectedSalary": "optional",
+      "notes": "optional"
+    },
+    "customFields": []
+  },
+  "clients": {
+    "billingEntityRequired": false,
+    "consultantAssignment": true,
+    "followUps": true,
+    "contractDocuments": true,
+    "statuses": [
+      "Active",
+      "Inactive",
+      "On Hold"
+    ],
+    "contactFields": [
+      "contactPerson",
+      "email",
+      "phone",
+      "designation"
+    ],
+    "contractFields": [
+      "contractDate",
+      "expiryDate",
+      "documents"
+    ],
+    "customNotes": true
+  },
+  "jobs": {
+    "statuses": [
+      "Ongoing (P1)",
+      "Delivered (P2)",
+      "Paused (P3)",
+      "Completed",
+      "Scrapped"
+    ],
+    "priorities": [
+      "Normal",
+      "High",
+      "Urgent"
+    ],
+    "fields": [
+      "title",
+      "location",
+      "vertical",
+      "experience",
+      "budget",
+      "salary",
+      "teamLead",
+      "skills",
+      "jdDocuments",
+      "openPositions"
+    ],
+    "locations": [],
+    "sectors": [],
+    "publicVisibility": true,
+    "consultantAllocation": true
+  },
+  "pipeline": [
+    {
+      "key": "interested",
+      "label": "Interested",
+      "enabled": true
+    },
+    {
+      "key": "in_discussion",
+      "label": "In Discussion",
+      "enabled": true
+    },
+    {
+      "key": "not_interested",
+      "label": "Not Interested",
+      "enabled": true
+    },
+    {
+      "key": "interview",
+      "label": "Interview",
+      "enabled": true
+    },
+    {
+      "key": "client_submission",
+      "label": "Client Submission",
+      "enabled": true
+    },
+    {
+      "key": "offered",
+      "label": "Offered",
+      "enabled": true
+    },
+    {
+      "key": "hired",
+      "label": "Hired",
+      "enabled": true
+    },
+    {
+      "key": "offer_declined",
+      "label": "Offer Declined",
+      "enabled": true
+    },
+    {
+      "key": "dropout",
+      "label": "Dropout",
+      "enabled": true
+    },
+    {
+      "key": "rejected_by_recruiter",
+      "label": "Rejected by Recruiter",
+      "enabled": true
+    },
+    {
+      "key": "rejected_by_client",
+      "label": "Rejected by Client",
+      "enabled": true
+    },
+    {
+      "key": "duplicate",
+      "label": "Duplicate",
+      "enabled": false,
+      "protected": true
+    }
+  ],
+  "ids": {
+    "candidatePrefix": "CA",
+    "clientPrefix": "CL",
+    "jobPrefix": "JB",
+    "employeePrefix": "EMP"
+  },
+  "billing": {
+    "enabled": true,
+    "taxEnabled": true,
+    "gstEnabled": true,
+    "gstPercentage": 18,
+    "defaultSac": "998512",
+    "invoiceTerms": "Payment due as per agreed terms.",
+    "paymentTerms": "Bank transfer",
+    "paymentDueDays": 30,
+    "roundOff": true,
+    "entities": [
+      {
+        "key": "FCS",
+        "name": "FyndBridge Consulting Services",
+        "invoicePrefix": "FB",
+        "proformaPrefix": "PI/FB",
+        "address": [
+          "Ground Floor, 20, New Delhi",
+          "Okhla Industrial Estate Phase 3, New Delhi",
+          "Delhi 110020"
+        ],
+        "phone": "9717773066",
+        "email": "partner@fyndbridge.in",
+        "state": "Delhi",
+        "stateCode": "07",
+        "gstin": "07AAJFF1433D1ZV",
+        "pan": "AAJFF1433D",
+        "bank": {
+          "name": "ICICI Bank Limited",
+          "accountName": "FyndBridge Consulting Services",
+          "accountNumber": "102305501028",
+          "ifsc": "ICIC0001023",
+          "swift": "",
+          "branch": "Okhla Industrial Estate, New Delhi",
+          "upi": ""
+        }
+      },
+      {
+        "key": "FCAPL",
+        "name": "FyndBridge Consultants & Advisors Private Limited",
+        "invoicePrefix": "FCAPL",
+        "proformaPrefix": "PI/FCAPL",
+        "address": [
+          "Second Floor, House No A-34, Pocket A-8",
+          "Kalkaji Extension, New Delhi",
+          "Delhi 110019"
+        ],
+        "phone": "9717773066",
+        "email": "partner@fyndbridge.in",
+        "state": "Delhi",
+        "stateCode": "07",
+        "gstin": "07AAFCF8821L1ZA",
+        "pan": "AAFCF8821L",
+        "bank": {
+          "name": "State Bank of India",
+          "accountName": "FyndBridge Consultants & Advisors Private Limited",
+          "accountNumber": "42926962136",
+          "ifsc": "SBIN0000727",
+          "swift": "",
+          "branch": "Okhla Industrial Estate, New Delhi",
+          "upi": ""
+        }
+      }
+    ],
+    "authorizedSignatoryText": "Authorised Signatory",
+    "footerText": "This is a computer-generated invoice."
+  },
+  "attendance": {
+    "workingDays": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "weekendDays": [
+      0
+    ],
+    "leaveTypes": [
+      "Paid Leave",
+      "Sick Leave",
+      "Casual Leave",
+      "Loss of Pay"
+    ],
+    "annualLeaveAllowance": 18,
+    "carryForwardLimit": 5,
+    "leaveAccrualStartMonth": "2026-08-01",
+    "manuallyCreditedLeaveMonths": [
+      "2026-07-01"
+    ],
+    "correctionWorkflow": true,
+    "workingHours": {
+      "start": "09:30",
+      "end": "18:30"
+    }
+  },
+  "performance": {
+    "frequency": "annual",
+    "ratingScale": {
+      "min": 1,
+      "max": 5
+    },
+    "reviewerTerm": "Reviewer",
+    "enabledSections": [
+      "goals",
+      "competencies",
+      "managerComments",
+      "employeeComments"
+    ],
+    "categories": [
+      "Delivery",
+      "Quality",
+      "Collaboration",
+      "Ownership",
+      "Client Management",
+      "Learning",
+      "Leadership"
+    ]
+  },
+  "publicCareers": {
+    "enabled": true,
+    "path": "/open-roles",
+    "headerText": "Open Roles",
+    "companyDescription": "Explore opportunities with our clients.",
+    "privacyText": "Your details and CV are submitted securely for recruitment review.",
+    "exposeClientName": false,
+    "contactEmail": "partner@fyndbridge.in",
+    "socialLinks": {}
+  },
+  "roles": {
+    "super_admin": [
+      "*"
+    ],
+    "admin": [
+      "*"
+    ],
+    "manager": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "reports",
+      "attendance",
+      "performance"
+    ],
+    "team_lead": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "reports",
+      "attendance"
+    ],
+    "consultant": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "attendance"
+    ],
+    "finance": [
+      "dashboard",
+      "clients",
+      "invoices"
+    ],
+    "hr": [
+      "dashboard",
+      "attendance",
+      "performance",
+      "admin"
+    ],
+    "viewer": [
+      "dashboard"
+    ]
+  },
+  "integrations": {
+    "supabase": true,
+    "googleOAuth": true,
+    "gemini": {
+      "enabled": true,
+      "model": "gemini-3.1-flash-lite"
+    },
+    "turnstile": true
+  },
+  "deployment": {
+    "frontendUrl": "",
+    "corsOrigins": [],
+    "vercelProjectName": ""
+  },
+  "documents": {
+    "contractBucket": "contract-pdfs",
+    "cvBucket": "resumes",
+    "jdBucket": "jds",
+    "invoiceBucket": "invoice",
+    "employeeHandbookBucket": "employee-handbook",
+    "userManualBucket": "user-manual",
+    "publicApplicationsBucket": "public-applications"
+  }
+}

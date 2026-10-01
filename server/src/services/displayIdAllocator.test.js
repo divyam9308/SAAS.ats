@@ -62,7 +62,7 @@ test('candidate allocation uses largest plus one when there is no gap', async ()
 test('candidate creation and database fallback both use lowest-gap allocation', () => {
   assert.match(
     candidateController,
-    /allocateNextDisplayId\(\{\s*supabase,\s*table:\s*'candidates',\s*column:\s*'candidate_display_id',\s*prefix:\s*'CA'\s*\}\)/
+    /allocateNextDisplayId\(\{\s*supabase,\s*table:\s*'candidates',\s*column:\s*'candidate_display_id',\s*prefix:\s*CANDIDATE_ID_PREFIX\s*\}\)/
   )
   assert.doesNotMatch(candidateController, /candidate_display_id'[\s\S]{0,100}mode:\s*'max_plus_one'/)
   assert.match(candidateGapMigration, /pg_advisory_xact_lock/)

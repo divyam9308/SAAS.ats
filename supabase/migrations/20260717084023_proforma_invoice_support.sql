@@ -322,3 +322,4 @@ grant execute on function public.next_invoice_sequence(text, text) to service_ro
 grant execute on function public.next_available_invoice_number_by_type(text, text, text) to service_role;
 grant execute on function public.next_available_invoice_number(text, text) to service_role;
 grant execute on function public.create_invoice_with_lowest_sequence(jsonb, text) to service_role;
+

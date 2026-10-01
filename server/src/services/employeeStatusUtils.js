@@ -19,3 +19,4 @@ function activeEmployeeOptions(rows) {
 }
 
 module.exports = { EMPLOYMENT_STATUSES, normalizeEmploymentStatus, validateEmploymentStatus, activeEmployeeOptions }
+

@@ -100,3 +100,4 @@ export function DocumentIconGroup({ attachments = [], onOpen, openingKey = '', k
     </span>
   )
 }
+

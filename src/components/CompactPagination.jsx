@@ -48,3 +48,4 @@ export default function CompactPagination({ page, totalPages, onPageChange, load
     </div>
   )
 }
+

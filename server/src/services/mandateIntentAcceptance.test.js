@@ -124,3 +124,4 @@ test('Mandate budget and experience ranges compile positive-width semantic overl
   assert.equal(mandateAiFilter.compileAst(budget), 'and(ai_budget_ceiling_lpa.gt."10",ai_budget_min_lpa.lt."20")')
   assert.equal(mandateAiFilter.compileAst(experience), 'and(ai_experience_ceiling_years.gt."5",ai_experience_min_years.lt."10")')
 })
+

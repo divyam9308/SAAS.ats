@@ -52,3 +52,4 @@ test('admin panel reuses the existing three-option permission control for the au
   assert.match(adminPage, /lowMandateAudienceDirty/)
   assert.match(adminPage, /updateDashboardVisibility\(\{ restrictNonAdminToSelf: dashboardRestricted, lowMandateNotificationAudience: lowMandateAudience \}\)/)
 })
+

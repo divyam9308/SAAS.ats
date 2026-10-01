@@ -79,3 +79,4 @@ export function formatInvoicePercentage(value) {
   if (!Number.isFinite(numeric)) return '—'
   return `${numeric.toLocaleString('en-IN', { maximumFractionDigits: 4 })}%`
 }
+

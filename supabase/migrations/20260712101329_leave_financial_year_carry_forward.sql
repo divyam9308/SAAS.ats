@@ -42,3 +42,4 @@ drop index if exists leave_ledger_monthly_accrual_idx;
 create unique index leave_ledger_monthly_accrual_idx
   on public.leave_ledger(user_id, financial_year, accrual_month)
   where entry_type = 'accrual';
+

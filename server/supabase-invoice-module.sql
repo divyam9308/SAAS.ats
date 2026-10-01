@@ -314,3 +314,4 @@ create policy invoice_pdf_versions_admin_all on invoice_pdf_versions
   using (exists (select 1 from admin_users where user_id = auth.uid() or lower(email) = lower(auth.jwt() ->> 'email')))
   with check (exists (select 1 from admin_users where user_id = auth.uid() or lower(email) = lower(auth.jwt() ->> 'email')));
 grant select, insert, update, delete on invoice_pdf_versions to authenticated;
+

@@ -50,3 +50,4 @@ test('attendance time and midnight reset use the company timezone', () => {
     86_400_000
   )
 })
+

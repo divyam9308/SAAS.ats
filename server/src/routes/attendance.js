@@ -24,3 +24,4 @@ router.get('/team',wrap(req=>service.team(req.user,Number(req.query.year),Number
 router.get('/leave-balances',wrap(req=>service.listLeaveBalances(req.user,req.query.financial_year)))
 router.post('/leave-balances/:userId/adjust',wrap(req=>service.adjustLeaveBalance(req.user,req.params.userId,req.body.amount,req.body.description,req.body.financial_year)))
 module.exports=router
+

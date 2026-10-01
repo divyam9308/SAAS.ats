@@ -57,3 +57,4 @@ alter table public.public_applications
   validate constraint public_applications_required_text_check;
 
 commit;
+

@@ -98,3 +98,4 @@ test('existing notification Realtime delivery remains the only notification UI p
   assert.match(notificationBell, /payload\.eventType === 'UPDATE'/)
   assert.match(notificationBell, /isVisibleNotification\(payload\.new\)/)
 })
+

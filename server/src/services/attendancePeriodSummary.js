@@ -125,3 +125,4 @@ function buildAttendancePeriodSummary({
 }
 
 module.exports = { buildAttendancePeriodSummary, normalizeAttendanceRecords }
+

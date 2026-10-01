@@ -64,3 +64,4 @@ test('money conversion rounds to paise without binary floating-point drift', () 
   assert.equal(moneyToPaise('1,23,456.789'), 12345679n)
   assert.equal(formatInrPaise(12345679n), '₹1,23,456.79')
 })
+

@@ -89,3 +89,4 @@ grant execute on function public.consume_public_application_rate_limit(text, tex
   to service_role;
 
 commit;
+

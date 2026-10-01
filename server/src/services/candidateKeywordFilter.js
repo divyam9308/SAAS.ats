@@ -44,3 +44,4 @@ function buildCandidateKeywordFilter(searchText, options = {}) {
 }
 
 module.exports = { KEYWORD_FIELDS, keywordTokens, buildCandidateKeywordFilter }
+

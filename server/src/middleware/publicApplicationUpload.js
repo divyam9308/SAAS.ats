@@ -99,3 +99,4 @@ module.exports = {
   validatePublicResume,
   handlePublicUploadErrors
 }
+

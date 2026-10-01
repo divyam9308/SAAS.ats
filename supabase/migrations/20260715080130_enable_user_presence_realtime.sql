@@ -10,3 +10,4 @@ begin
     alter publication supabase_realtime add table public.user_presence;
   end if;
 end $$;
+

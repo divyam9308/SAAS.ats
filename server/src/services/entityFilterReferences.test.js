@@ -57,3 +57,4 @@ test('empty assignment filters do not fetch the profile directory', async () => 
   assert.equal(queried, false)
   assert.equal(result.root.operator, 'is_empty')
 })
+

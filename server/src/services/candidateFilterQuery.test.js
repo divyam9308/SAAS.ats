@@ -305,3 +305,4 @@ test('base-only query preserves the existing candidate container response shape'
   assert.deepEqual(db.calls[1].args, ['*, candidate_associations(*)', { count: 'exact' }])
   assert.deepEqual(db.calls.map(call => call.method), ['from', 'select', 'or', 'range'])
 })
+

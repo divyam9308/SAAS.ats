@@ -6,7 +6,7 @@ import {
   X
 } from 'lucide-react'
 import CompactPagination from '../../components/CompactPagination'
-import { FyndbridgeLoader } from '../../components/FyndbridgeLoader'
+import { AtsLoader } from '../../components/AtsLoader'
 import ReportKpiCard from '../../components/ReportKpiCard'
 import { CANDIDATE_STATUSES } from '../../utils/candidateStatuses'
 import { MANDATE_STATUSES, mandateStatusClassName, mandateStatusLabel } from '../../utils/mandateStatuses'
@@ -299,7 +299,7 @@ export function ReportDataModal({ kind, fetchRows, onClose }) {
           </label>
         </div>
         <div className="report-modal-body" aria-busy={loading}>
-          {loading ? <FyndbridgeLoader size={70} label="Loading report data..." /> : error ? (
+          {loading ? <AtsLoader size={70} label="Loading report data..." /> : error ? (
             <div className="report-empty-state report-error-state">
               <p>{error}</p>
               <button className="report-secondary-button" type="button" onClick={() => { setLoading(true); setError(''); setRetryKey((value) => value + 1) }}>Try again</button>
@@ -388,3 +388,4 @@ export function CandidatePipeline({ stages = [], total = 0 }) {
     </div>
   )
 }
+

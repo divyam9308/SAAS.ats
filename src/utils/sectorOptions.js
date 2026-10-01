@@ -18,3 +18,4 @@ export const SECTOR_OPTIONS = [
   'Social Sector',
   'Technology',
 ]
+

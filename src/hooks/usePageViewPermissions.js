@@ -72,3 +72,4 @@ export function usePageViewPermissions(access = {}) {
     firstPermittedRoute: (excludedKey) => firstPermittedPageRoute({ isAdmin, isSuperAdmin }, state.permissions, excludedKey)
   }
 }
+

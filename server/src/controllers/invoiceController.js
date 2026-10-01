@@ -2,10 +2,12 @@ const supabase = require('../services/supabaseAdmin')
 const { normalizeGstin } = require('../services/gstLookup')
 const { STORAGE_BUCKETS, normalizeStoragePath } = require('../services/storageBuckets')
 const { aggregateTaxInvoiceTotals } = require('../services/invoiceTotals')
+const { companyConfig, billingEntity: billingEntityConfig } = require('../config/companyConfig')
 const {
   BILLING_ENTITIES, GST_COMPONENTS, INVOICE_TYPES, MODELS, clean, financialYear,
   detectGstComponent, calculateInvoice, createInvoicePdf
 } = require('../services/invoiceService')
+const DEFAULT_BILLING_ENTITY = companyConfig.billing.entities[0]?.key || 'PRIMARY'
 
 const ENTITY_FIELDS = 'id, invoice_id, entity_display_id, legal_entity_name, optional_name, address, pan, place_of_supply, state, state_code, gstin, contact_person, email, sac, billing_entity, gst_component, igst_rate, cgst_rate, sgst_rate, created_at, updated_at'
 const INVOICE_FIELDS = 'id, invoice_entity_id, invoice_type, invoice_display_id, invoice_number, financial_year, sequence_number, invoice_date, consultant_name, candidate_name, professional_fee_text, model, ctc_lpa, model_percent, model_flat_fee, retainer_amount, project_amount, jra_adjustment_value, jra_base_value, jra_flat_fee, others_amount, sac, billing_entity, taxable_amount, gst_component, igst_rate, igst_amount, cgst_rate, cgst_amount, sgst_rate, sgst_amount, total_tax_amount, total_before_rounding, rounding_type, rounding_amount, grand_total, pdf_storage_path, status, cancelled_at, cancelled_by, created_at'
@@ -69,7 +71,7 @@ async function nextInvoiceDisplayId() {
 }
 
 function entityPayload(body) {
-  const billing = BILLING_ENTITIES.has(body.billing_entity) ? body.billing_entity : 'FCS'
+  const billing = BILLING_ENTITIES.has(body.billing_entity) ? body.billing_entity : DEFAULT_BILLING_ENTITY
   const gst = GST_COMPONENTS.has(body.gst_component) ? body.gst_component : detectGstComponent(body.state_code, body.state, body.place_of_supply, body.address)
   const gstin = nullable(body.gstin)
   return {
@@ -79,10 +81,10 @@ function entityPayload(body) {
     state: nullable(body.state), state_code: nullable(body.state_code),
     gstin: gstin ? normalizeGstin(gstin) : null,
     contact_person: nullable(body.contact_person), email: nullable(body.email),
-    sac: clean(body.sac) || '998512', billing_entity: billing, gst_component: gst,
-    igst_rate: numberOrNull(body.igst_rate) ?? 18,
-    cgst_rate: numberOrNull(body.cgst_rate) ?? 9,
-    sgst_rate: numberOrNull(body.sgst_rate) ?? 9,
+    sac: clean(body.sac) || companyConfig.billing.defaultSac, billing_entity: billing, gst_component: gst,
+    igst_rate: numberOrNull(body.igst_rate) ?? companyConfig.billing.gstPercentage,
+    cgst_rate: numberOrNull(body.cgst_rate) ?? companyConfig.billing.gstPercentage / 2,
+    sgst_rate: numberOrNull(body.sgst_rate) ?? companyConfig.billing.gstPercentage / 2,
     updated_at: new Date().toISOString()
   }
 }
@@ -216,14 +218,13 @@ async function nextNumberParts(billingEntity, invoiceDate, invoiceType = 'tax_in
 }
 
 function invoiceNumberForSequence(billingEntity, invoiceType, financialYearValue, sequence) {
-  const prefix = invoiceType === 'proforma_invoice'
-    ? (billingEntity === 'FCS' ? 'PI/FB' : 'PI/FCAPL')
-    : billingEntity === 'FCAPL' ? 'FCAPL' : 'FB'
+  const configured = billingEntityConfig(billingEntity)
+  const prefix = invoiceType === 'proforma_invoice' ? configured?.proformaPrefix : configured?.invoicePrefix
   return `${prefix}/${financialYearValue}/${String(sequence).padStart(3, '0')}`
 }
 
 async function reassignmentNumberParts(existing, entity, invoiceDate) {
-  const billingEntity = BILLING_ENTITIES.has(entity.billing_entity) ? entity.billing_entity : 'FCS'
+  const billingEntity = BILLING_ENTITIES.has(entity.billing_entity) ? entity.billing_entity : DEFAULT_BILLING_ENTITY
   const targetFinancialYear = financialYear(invoiceDate)
   const staysInSeries = existing.financial_year === targetFinancialYear &&
     existing.billing_entity === billingEntity
@@ -249,7 +250,7 @@ async function reassignmentNumberParts(existing, entity, invoiceDate) {
 async function nextNumber(req, res) {
   try {
     const invoiceType = normalizeInvoiceType(req.query.invoice_type)
-    const billing = BILLING_ENTITIES.has(req.query.billing_entity) ? req.query.billing_entity : 'FCS'
+    const billing = BILLING_ENTITIES.has(req.query.billing_entity) ? req.query.billing_entity : DEFAULT_BILLING_ENTITY
     return res.json(await nextNumberParts(billing, req.query.invoice_date || new Date().toISOString().slice(0, 10), invoiceType))
   } catch (err) { return sendError(res, err) }
 }
@@ -259,17 +260,17 @@ async function invoiceInput(body, { entityControlsInvoice = false } = {}) {
   const { data: entity, error } = await supabase.from('invoice_entities').select(ENTITY_FIELDS).eq('id', body.invoice_entity_id || body.entity_id).maybeSingle()
   if (error) throw error
   if (!entity) throw Object.assign(new Error('Entity not found'), { statusCode: 404 })
-  const requestedBilling = BILLING_ENTITIES.has(body.billing_entity) ? body.billing_entity : entity.billing_entity || 'FCS'
+  const requestedBilling = BILLING_ENTITIES.has(body.billing_entity) ? body.billing_entity : entity.billing_entity || DEFAULT_BILLING_ENTITY
   const input = {
     ...entity, ...body,
     invoice_type: invoiceType,
-    billing_entity: (entityControlsInvoice || invoiceType === 'proforma_invoice') ? entity.billing_entity || 'FCS' : requestedBilling,
+    billing_entity: (entityControlsInvoice || invoiceType === 'proforma_invoice') ? entity.billing_entity || DEFAULT_BILLING_ENTITY : requestedBilling,
     model: MODELS.has(body.model) ? body.model : 'joining_percentage',
-    sac: entityControlsInvoice ? clean(entity.sac) || '998512' : clean(body.sac || entity.sac) || '998512',
+    sac: entityControlsInvoice ? clean(entity.sac) || companyConfig.billing.defaultSac : clean(body.sac || entity.sac) || companyConfig.billing.defaultSac,
     gst_component: detectGstComponent(entity.state_code, entity.state, entity.place_of_supply, entity.address),
-    igst_rate: entityControlsInvoice ? entity.igst_rate ?? 18 : body.igst_rate,
-    cgst_rate: entityControlsInvoice ? entity.cgst_rate ?? 9 : body.cgst_rate,
-    sgst_rate: entityControlsInvoice ? entity.sgst_rate ?? 9 : body.sgst_rate
+    igst_rate: entityControlsInvoice ? entity.igst_rate ?? companyConfig.billing.gstPercentage : body.igst_rate,
+    cgst_rate: entityControlsInvoice ? entity.cgst_rate ?? companyConfig.billing.gstPercentage / 2 : body.cgst_rate,
+    sgst_rate: entityControlsInvoice ? entity.sgst_rate ?? companyConfig.billing.gstPercentage / 2 : body.sgst_rate
   }
   const invoiceDate = body.invoice_date || new Date().toISOString().slice(0, 10)
   return { entity, input, invoiceDate, billing: input.billing_entity, calc: calculateInvoice(input) }

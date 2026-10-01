@@ -90,3 +90,4 @@ export const cancelInvoice = async (entityId, id, invoiceType = 'tax_invoice') =
   invalidateApiJsonCache('/api/invoice/entities')
   return result
 }
+

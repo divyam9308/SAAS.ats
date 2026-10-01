@@ -52,3 +52,4 @@ test('Mandates and Client Details open external JD links and show link icons', (
   assert.match(clientDetailPage, /openExternalUrl\(path\)/)
   assert.match(clientDetailPage, /showExternalLinkIcon/)
 })
+

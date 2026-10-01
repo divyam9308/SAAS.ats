@@ -12,3 +12,4 @@ export function ConsultantPillGroup({ consultants, onClick }) {
   if (!names.length) return <span className="consultant-pill-empty">-</span>
   return <ConsultantPill name={names[0]} extraCount={names.length - 1} onClick={names.length > 1 ? onClick : undefined} />
 }
+

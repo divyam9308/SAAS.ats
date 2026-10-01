@@ -32,3 +32,4 @@ async function employmentStatus(req, res) {
 }
 
 module.exports = { me, employmentStatus }
+

@@ -37,3 +37,4 @@ function normalizeSelections(value) {
 }
 
 module.exports = { CATEGORIES, normalizeCategorySelection, normalizeSelections }
+

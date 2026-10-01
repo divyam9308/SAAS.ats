@@ -85,3 +85,4 @@ function aggregateAttendance(rows = []) {
 }
 
 module.exports = { aggregateAttendance, attendancePayload, workedTimeLabel }
+

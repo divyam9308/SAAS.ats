@@ -135,3 +135,4 @@ export async function deleteRecords(entityType, ids, deleteLinkedCandidateRows =
   invalidateApiJsonCache()
   return result
 }
+

@@ -138,3 +138,4 @@ test('only Upload Resumes is wired to the scoped parser', () => {
   assert.match(candidatesPage, /response\.status === 413 \? `\$\{message\} \$\{RESUME_PARSE_SIZE_GUIDANCE\}` : message/)
   assert.doesNotMatch(resumeController, /combined file size of all uploaded CVs/i)
 })
+

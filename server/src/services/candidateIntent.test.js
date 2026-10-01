@@ -267,3 +267,4 @@ test('persisted structured contracts recompute derived AST and conditions before
   assert.equal(validated.root.field, 'consultant')
   assert.deepEqual(validated.conditions.map(item => item.field), ['consultant'])
 })
+

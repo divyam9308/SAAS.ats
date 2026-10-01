@@ -23,6 +23,8 @@ const { CANDIDATE_STATUSES: VALID_STATUSES, candidateStatusError, cleanStatus: c
 const { removeUnreferencedDocuments, uploadDocuments } = require('../services/documentStorage')
 const { normalizeAttachment, normalizeAttachments, removalPlan } = require('../services/documentAttachments')
 const candidateCreation = require('../services/candidateCreation')
+const { companyConfig } = require('../config/companyConfig')
+const CANDIDATE_ID_PREFIX = companyConfig.ids.candidatePrefix
 
 const CANDIDATE_FIELDS = [
   'full_name',
@@ -274,14 +276,14 @@ async function ensureCandidateDisplayIds() {
 
   const usedDisplayIds = new Set(
     candidates
-      .map((candidate) => displayIdNumber(candidate.candidate_display_id, 'CA'))
+      .map((candidate) => displayIdNumber(candidate.candidate_display_id, CANDIDATE_ID_PREFIX))
       .filter((number) => number < Number.MAX_SAFE_INTEGER)
   )
   let next = 1
 
   for (const candidate of candidates.filter((item) => !cleanText(item.candidate_display_id))) {
     while (usedDisplayIds.has(next)) next += 1
-    const displayId = `CA${next}`
+    const displayId = `${CANDIDATE_ID_PREFIX}${next}`
     usedDisplayIds.add(next)
     next += 1
     const { error: updateError } = await supabase
@@ -293,7 +295,7 @@ async function ensureCandidateDisplayIds() {
 }
 
 async function nextCandidateDisplayId() {
-  return allocateNextDisplayId({ supabase, table: 'candidates', column: 'candidate_display_id', prefix: 'CA' })
+  return allocateNextDisplayId({ supabase, table: 'candidates', column: 'candidate_display_id', prefix: CANDIDATE_ID_PREFIX })
 }
 
 async function getNextCandidateDisplayId(req, res) {

@@ -176,3 +176,4 @@ export default function FormattedDateInput({ value, onChange, className = 'form-
     </span>
   )
 }
+

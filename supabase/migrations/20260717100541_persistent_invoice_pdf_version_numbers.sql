@@ -183,3 +183,4 @@ grant execute on function public.create_invoice_pdf_version(uuid, text)
   to service_role;
 grant execute on function public.attach_invoice_pdf(uuid, text)
   to service_role;
+

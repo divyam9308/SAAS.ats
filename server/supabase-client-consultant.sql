@@ -7,3 +7,4 @@ create index if not exists clients_consultant_name_idx
 
 create index if not exists clients_consultant_user_id_idx
   on public.clients(consultant_user_id);
+

@@ -66,3 +66,4 @@ export async function openAppliedCandidateCv(id) {
     notFoundMessage: 'The staged application CV could not be opened.',
   })
 }
+

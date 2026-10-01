@@ -28,3 +28,4 @@ test('protected CV access still requires candidates.id and verifies path ownersh
   assert.match(documentAccess, /\.from\(scope\.table\)[\s\S]*?\.eq\('id', recordId\)/)
   assert.match(documentAccess, /attachments\.some\(attachment => attachment\.path === path\)/)
 })
+

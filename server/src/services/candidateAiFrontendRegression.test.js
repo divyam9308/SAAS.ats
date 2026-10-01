@@ -55,3 +55,4 @@ test('a completed filtered request with no matches also shows the red alert abov
   assert.match(source, /!loadingCandidates && !apiError && !aiFilterError && hasActiveCandidateFilters && filtered\.length === 0/)
   assert.match(source, /className="form-error"[\s\S]*role="alert"[\s\S]*No candidates match your filters\. Try changing or clearing the filters\./)
 })
+

@@ -82,3 +82,4 @@ create index if not exists notifications_recipient_cleared_idx
 
 create index if not exists notifications_action_recipient_follow_up_idx
   on public.notifications(action_type, recipient_user_id, client_id, follow_up_id, follow_up_date);
+

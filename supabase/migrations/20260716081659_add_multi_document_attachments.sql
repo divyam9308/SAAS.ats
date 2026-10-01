@@ -126,3 +126,4 @@ comment on column public.clients.contract_attachments is
 drop policy if exists "contract pdfs authenticated select" on storage.objects;
 drop policy if exists "contract pdfs authenticated insert" on storage.objects;
 drop policy if exists "contract pdfs authenticated update" on storage.objects;
+

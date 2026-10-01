@@ -41,3 +41,4 @@ test('keyword fallback fails safely when permissions hide every searchable field
     error => error.statusCode === 400
   )
 })
+

@@ -6,3 +6,4 @@ create table if not exists user_preferences (
   updated_at timestamptz not null default now(),
   unique (user_id, preference_key)
 );
+

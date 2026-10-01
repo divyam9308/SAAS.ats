@@ -16,3 +16,4 @@ on public.jobs (client_id, created_at desc);
 create index if not exists notifications_recipient_uncleared_created_idx
 on public.notifications (recipient_user_id, created_at desc)
 where cleared_at is null;
+

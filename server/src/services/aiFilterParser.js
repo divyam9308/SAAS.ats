@@ -32,3 +32,4 @@ async function parseAiFilters(page, prompt, options = {}) {
 }
 
 module.exports = { parseAiFilters }
+

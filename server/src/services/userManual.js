@@ -135,3 +135,4 @@ async function updateUserManual(user, file) {
 }
 
 module.exports = { getUserManual, updateUserManual }
+

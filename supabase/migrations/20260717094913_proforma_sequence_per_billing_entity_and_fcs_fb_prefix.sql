@@ -397,3 +397,4 @@ grant execute on function public.create_invoice_with_lowest_sequence(jsonb, text
   to service_role;
 grant execute on function public.update_invoice_with_reassigned_sequence(uuid, jsonb, text)
   to service_role;
+

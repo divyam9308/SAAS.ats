@@ -33,3 +33,4 @@ begin
     alter publication supabase_realtime add table public.leave_ledger;
   end if;
 end $$;
+

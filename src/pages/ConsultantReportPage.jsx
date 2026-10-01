@@ -3,8 +3,9 @@ import { BriefcaseBusiness, CalendarCheck2, ChevronDown, FileDown, LoaderCircle,
 import { useSearchParams } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useAuth } from '../context/useAuth'
+import { companyConfig } from '../config/companyConfig'
 import FormattedDateInput from '../components/FormattedDateInput'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import {
   CandidateOverview,
   CandidatePipeline,
@@ -525,7 +526,7 @@ export default function ConsultantReportPage() {
   const [exportLoading, setExportLoading] = useState(false)
   const exportControllerRef = useRef(null)
 
-  const userLabel = user?.profile_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'FYNDBRIDGE User'
+  const userLabel = user?.profile_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || `${companyConfig.company.displayName} User`
   const selectedOption = useMemo(
     () => options.find((option) => option.key === (appliedFilters?.consultantUserId || requestFilters?.consultantUserId)),
     [appliedFilters?.consultantUserId, options, requestFilters?.consultantUserId]
@@ -741,7 +742,7 @@ export default function ConsultantReportPage() {
       const objectUrl = window.URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = objectUrl
-      anchor.download = result.fileName || 'Fyndbridge_Consultant_Report.xlsx'
+      anchor.download = result.fileName || `${companyConfig.company.shortName.replace(/\W+/g, '_')}_Consultant_Report.xlsx`
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
@@ -936,7 +937,7 @@ export default function ConsultantReportPage() {
             <button className="report-secondary-button" type="button" onClick={() => { setOptionsLoading(true); setOptionsError(''); setOptionsRetryKey((value) => value + 1) }}>Try again</button>
           </section>
         ) : (optionsLoading || reportLoading) && !report ? (
-          <section className="report-load-state"><FyndbridgeLoader size={82} label={optionsLoading ? 'Loading report access...' : 'Generating consultant report...'} /></section>
+          <section className="report-load-state"><AtsLoader size={82} label={optionsLoading ? 'Loading report access...' : 'Generating consultant report...'} /></section>
         ) : reportError && !report ? (
           <section className="report-load-state report-error-panel" role="alert">
             <h2>Report could not be generated</h2>

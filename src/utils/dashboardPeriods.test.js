@@ -26,3 +26,4 @@ test('current financial-year range is capped at today', () => {
     { startDate: '2026-04-01', endDate: '2026-07-27' }
   )
 })
+

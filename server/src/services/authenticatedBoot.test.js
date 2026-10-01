@@ -33,7 +33,7 @@ test('initial route preload covers dashboard, detail, settings, and invoice rout
 
 test('public open roles tree is structurally outside authenticated providers and shell', () => {
   const rootRoutes = app.slice(app.indexOf('function App()'))
-  const publicRouteIndex = rootRoutes.indexOf('<Route path="/open-roles"')
+  const publicRouteIndex = rootRoutes.indexOf('<Route path={`/${publicPath}`}')
   const authenticatedFallbackIndex = rootRoutes.indexOf('<Route path="*" element={<AuthenticatedRoutes')
   assert.ok(publicRouteIndex >= 0, 'missing public open roles route')
   assert.ok(authenticatedFallbackIndex > publicRouteIndex, 'authenticated fallback must follow the public route')
@@ -51,5 +51,5 @@ test('public boot does not statically initialize Supabase or attach authenticate
 test('public routes are not internally preloaded while Applied Candidates remains protected and preloadable', () => {
   assert.ok(!preload.includes("'/open-roles'"), 'public roles must not enter authenticated route preloaders')
   assert.ok(preload.includes("'/dashboard/applied-candidates'"), 'missing Applied Candidates preloader')
-  assert.match(app, /path="applied-candidates" element={<PageViewGuard pageKey="applied_candidates"><AppliedCandidatesPage \/><\/PageViewGuard>}/)
+  assert.match(app, /path="applied-candidates" element={<ModuleGuard module="applications"><PageViewGuard pageKey="applied_candidates"><AppliedCandidatesPage \/><\/PageViewGuard><\/ModuleGuard>}/)
 })

@@ -66,3 +66,4 @@ export async function uploadEmployeeHandbook(file) {
   invalidateApiJsonCache('/api/performance/handbook')
   return result
 }
+

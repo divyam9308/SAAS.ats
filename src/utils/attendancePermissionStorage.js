@@ -14,3 +14,4 @@ export function loadAttendancePermissions() {
 export function saveAttendancePermissions(permissions) {
   localStorage.setItem(ATTENDANCE_PERMISSION_STORAGE_KEY, JSON.stringify({ ...DEFAULT_ATTENDANCE_PERMISSIONS, ...permissions }))
 }
+

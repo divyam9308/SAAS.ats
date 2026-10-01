@@ -49,3 +49,4 @@ export default function TablePopover({ anchorRect, onClose, width = 180, childre
     document.body
   )
 }
+

@@ -1,16 +1,8 @@
-export const CANDIDATE_STATUSES = [
-  'Interested',
-  'In Discussion',
-  'Not Interested',
-  'Interview',
-  'Client Submission',
-  'Offered',
-  'Hired',
-  'Offer Declined',
-  'Dropout',
-  'Rejected by Recruiter',
-  'Rejected by Client'
-]
+import { companyConfig } from '../config/companyConfig'
+
+export const CANDIDATE_PIPELINE = companyConfig.pipeline.filter(stage => stage.enabled)
+export const CANDIDATE_STATUS_KEYS = CANDIDATE_PIPELINE.map(stage => stage.key)
+export const CANDIDATE_STATUSES = CANDIDATE_PIPELINE.map(stage => stage.label)
 
 export const CANDIDATE_STATUS_OPTIONS = ['', ...CANDIDATE_STATUSES]
 export const DASHBOARD_CANDIDATE_STATUSES = [...CANDIDATE_STATUSES, '-']
@@ -39,4 +31,5 @@ export const CANDIDATE_STATUS_BADGE_MAP = {
   'Rejected by Recruiter': 'badge-rejected-recruiter',
   'Rejected by Client': 'badge-rejected-client',
   '-': 'badge-status-unset',
+  ...Object.fromEntries(CANDIDATE_PIPELINE.map(stage => [stage.label, `badge-${stage.key.replaceAll('_', '-')}`])),
 }

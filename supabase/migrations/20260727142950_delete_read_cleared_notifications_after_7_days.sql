@@ -30,3 +30,4 @@ delete from public.notifications
 where status = 'read'
   and cleared_at is not null
   and cleared_at <= now() - interval '7 days';
+

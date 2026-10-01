@@ -120,3 +120,4 @@ test('impact confirmation renders above the record selection modal', () => {
     'confirmation overlay must render above the selection modal card'
   )
 })
+

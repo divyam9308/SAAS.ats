@@ -7,3 +7,4 @@ router.get('/open/:type', controller.openDocument)
 
 module.exports = router
 
+

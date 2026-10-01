@@ -23,3 +23,4 @@ export function leaveRangeHasSundayBoundary(start,end) {
 export function initials(name) { return name.split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase() }
 export function minutesBetween(a,b) { if(!a||!b) return 0; const [ah,am]=a.split(':').map(Number); const [bh,bm]=b.split(':').map(Number); return Math.max(0,bh*60+bm-ah*60-am) }
 export function durationLabel(minutes) { return `${Math.floor(minutes/60)}h ${String(minutes%60).padStart(2,'0')}m` }
+

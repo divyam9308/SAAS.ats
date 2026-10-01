@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Check, Download, FileClock, FileText, Pencil, Plus, ReceiptText, Save as SaveIcon, Search, Trash2, X } from 'lucide-react'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import ModelFields from '../components/InvoiceModelFields'
 import ReportKpiCard from '../components/ReportKpiCard'
 import {
@@ -15,19 +15,21 @@ import { useInvoiceRowControls } from '../hooks/useInvoiceRowControls'
 import { EMPTY_INVOICE, INVOICE_MODELS, INVOICE_TYPE_LABELS, calculateInvoicePreview, detectInvoiceGstComponent } from '../utils/invoiceModels'
 import { formatDateDDMMYYYY } from '../utils/dateFormat'
 import { formatInrPaise, invoiceMoneyValues } from '../utils/invoiceValues'
+import { companyConfig } from '../config/companyConfig'
 import '../styles/Shared.css'
 import './DashboardHome.css'
 import './InvoicePage.css'
 
+const DEFAULT_BILLING_ENTITY = companyConfig.billing.entities[0]?.key || 'PRIMARY'
 const EMPTY_ENTITY = {
-  billing_entity: 'FCS', legal_entity_name: '', optional_name: '-', address: '', gstin: '', pan: '', place_of_supply: '', state: '',
-  state_code: '', contact_person: '', email: '', sac: '998512', gst_component: 'IGST', igst_rate: 18, cgst_rate: 9, sgst_rate: 9
+  billing_entity: DEFAULT_BILLING_ENTITY, legal_entity_name: '', optional_name: '-', address: '', gstin: '', pan: '', place_of_supply: '', state: '',
+  state_code: '', contact_person: '', email: '', sac: companyConfig.billing.defaultSac, gst_component: 'IGST', igst_rate: companyConfig.billing.gstPercentage, cgst_rate: companyConfig.billing.gstPercentage / 2, sgst_rate: companyConfig.billing.gstPercentage / 2
 }
 const ENTITY_FIELDS = Object.keys(EMPTY_ENTITY)
 const SEARCH_FIELDS = ['entity_display_id', 'invoice_id', 'legal_entity_name', 'optional_name', 'gstin', 'pan', 'contact_person', 'email', 'billing_entity']
 const INVOICE_TABLE_HEADERS = ['Entity ID', 'Default Billing Entity', 'Legal Entity Name', 'Optional Name', 'Address', 'GSTIN', 'PAN', 'Place of Supply', 'State', 'State Code', 'Contact Person', 'Contact Email', 'SAC', 'GST Component', 'Rate', 'Actions']
-const BILLING_ENTITIES = ['FCS', 'FCAPL']
-const COMBINED_BILLING_ENTITY = 'FCS + FCAPL'
+const BILLING_ENTITIES = companyConfig.billing.entities.map(entity => entity.key)
+const COMBINED_BILLING_ENTITY = BILLING_ENTITIES.join(' + ')
 const BILLING_TOTAL_ROWS = [...BILLING_ENTITIES, COMBINED_BILLING_ENTITY]
 const POPUP_INVOICE_STATUSES = new Set(['active', 'cancelled'])
 const KPI_CARDS = [
@@ -69,7 +71,7 @@ function Input({ name, value, update, ...props }) {
 function InvoiceTableSkeleton({ label }) {
   return (
     <div className="invoice-table-loading">
-      <FyndbridgeLoader size={88} label={label} className="invoice-inline-loader" />
+      <AtsLoader size={88} label={label} className="invoice-inline-loader" />
     </div>
   )
 }
@@ -219,7 +221,7 @@ function EntityModal({ initial, onClose, onSave }) {
     <div className="modal-header"><span className="modal-title">{initial ? 'Edit Entity' : 'Add Entity'}</span><button className="modal-close" onClick={onClose}><X size={16} /></button></div>
     <div className="modal-body">{error && <div className="invoice-form-error">{error}</div>}
       <section className="invoice-form-section"><h3>Entity Details</h3><div className="form-grid-2">
-        <Field label="Default Billing Entity"><select className="form-control" name="billing_entity" value={form.billing_entity} onChange={update}><option>FCS</option><option>FCAPL</option></select></Field>
+        <Field label="Default Billing Entity"><select className="form-control" name="billing_entity" value={form.billing_entity} onChange={update}>{BILLING_ENTITIES.map(entity => <option key={entity}>{entity}</option>)}</select></Field>
         <Field label="Legal Entity Name"><Input name="legal_entity_name" value={form.legal_entity_name} update={update} /></Field>
         <Field label="Optional Name"><Input name="optional_name" value={form.optional_name} update={update} /></Field>
         <Field label="Address" full><textarea className="form-control" name="address" value={form.address || ''} onChange={update} rows={3} /></Field>
@@ -249,7 +251,7 @@ function CreateInvoiceModal({ entities, invoiceType, onClose, onCreated }) {
   const typeLabel = INVOICE_TYPE_LABELS[invoiceType]
   useEffect(() => {
     let active = true
-    fetchNextInvoiceNumber(form.billing_entity || 'FCS', form.invoice_date || today(), invoiceType)
+    fetchNextInvoiceNumber(form.billing_entity || DEFAULT_BILLING_ENTITY, form.invoice_date || today(), invoiceType)
       .then(data => {
         if (!active) return
         setNextNumber(data.invoiceNumber)
@@ -279,7 +281,7 @@ function CreateInvoiceModal({ entities, invoiceType, onClose, onCreated }) {
     setNextNumber('')
     setNextNumberLoading(true)
     setNextNumberFailed(false)
-    if (entity) setForm(current => ({ ...current, billing_entity: entity.billing_entity || 'FCS', sac: entity.sac || '998512', gst_component: detectInvoiceGstComponent(entity), igst_rate: entity.igst_rate ?? 18, cgst_rate: entity.cgst_rate ?? 9, sgst_rate: entity.sgst_rate ?? 9 }))
+    if (entity) setForm(current => ({ ...current, billing_entity: entity.billing_entity || DEFAULT_BILLING_ENTITY, sac: entity.sac || companyConfig.billing.defaultSac, gst_component: detectInvoiceGstComponent(entity), igst_rate: entity.igst_rate ?? companyConfig.billing.gstPercentage, cgst_rate: entity.cgst_rate ?? companyConfig.billing.gstPercentage / 2, sgst_rate: entity.sgst_rate ?? companyConfig.billing.gstPercentage / 2 }))
   }
   const preview = async () => {
     if (!selected) return setError('Select an entity.')
@@ -307,7 +309,7 @@ function CreateInvoiceModal({ entities, invoiceType, onClose, onCreated }) {
       <section className="invoice-form-section"><h3>{typeLabel} Details</h3><div className="form-grid-2">
         <Field label="Consultant Name"><Input name="consultant_name" value={form.consultant_name} update={update} /></Field><Field label="Candidate Name"><Input name="candidate_name" value={form.candidate_name} update={update} /></Field>
         <Field label="Invoice Date"><Input type="date" name="invoice_date" value={form.invoice_date} update={update} /></Field><Field label="Invoice Number Preview"><input className="form-control" value={nextNumberPreview} readOnly /></Field>
-        <Field label="Billing Entity"><select className="form-control" name="billing_entity" value={form.billing_entity} onChange={update} disabled={invoiceType === 'proforma_invoice'} title={invoiceType === 'proforma_invoice' ? 'Automatically determined by the selected entity' : undefined}><option>FCS</option><option>FCAPL</option></select></Field>
+        <Field label="Billing Entity"><select className="form-control" name="billing_entity" value={form.billing_entity} onChange={update} disabled={invoiceType === 'proforma_invoice'} title={invoiceType === 'proforma_invoice' ? 'Automatically determined by the selected entity' : undefined}>{BILLING_ENTITIES.map(entity => <option key={entity}>{entity}</option>)}</select></Field>
         <Field label="Model"><select className="form-control" name="model" value={form.model} onChange={update}>{INVOICE_MODELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
         <Field label="Professional Fee Text" full><textarea className="form-control" name="professional_fee_text" value={form.professional_fee_text} onChange={update} rows={3} /></Field>
         <ModelFields form={form} update={update} />

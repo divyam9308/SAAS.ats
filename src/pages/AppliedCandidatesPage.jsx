@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { ConsultantPillGroup } from '../components/ConsultantPill'
 import PaginationBar from '../components/PaginationBar'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import { isColumnDisabled, isColumnHidden, useAdminAccess } from '../hooks/useAdminAccess'
 import { useStaffDirectory } from '../hooks/useStaffDirectory'
 import {
@@ -583,7 +583,7 @@ export default function AppliedCandidatesPage() {
           <div className="table-wrapper candidates-table-scroll">
             <table className="data-table fb-theme-table candidates-master-table applied-candidates-table table-loading-table" aria-label="Loading applied candidates" style={{ minWidth: APPLIED_CANDIDATE_TABLE_WIDTH }}>
               <thead><tr>{APPLIED_CANDIDATE_COLUMNS.map(column => <th key={column}>{column}</th>)}</tr></thead>
-              <tbody><tr className="table-loading-row"><td className="table-loading-cell" colSpan={APPLIED_CANDIDATE_COLUMNS.length}><FyndbridgeLoader size={88} label="Loading applied candidates..." className="table-inline-loader" /></td></tr></tbody>
+              <tbody><tr className="table-loading-row"><td className="table-loading-cell" colSpan={APPLIED_CANDIDATE_COLUMNS.length}><AtsLoader size={88} label="Loading applied candidates..." className="table-inline-loader" /></td></tr></tbody>
             </table>
           </div>
         ) : (
@@ -638,7 +638,7 @@ export default function AppliedCandidatesPage() {
               <div><span>Public Roles application</span><h2>{drawer.mode === 'convert' ? 'Add to Candidates' : display(drawer.row.full_name)}</h2></div>
               <button className="modal-close" type="button" onClick={closeDrawer} disabled={conversionSaving} aria-label="Close drawer"><X size={17} /></button>
             </header>
-            {drawerLoading || (drawer.mode === 'convert' && accessLoading) ? <FyndbridgeLoader fullHeight={false} label="Loading application..." /> : drawer.error ? <div className="applied-drawer-error"><AlertTriangle size={18} />{drawer.error}</div> : drawer.mode === 'details' ? (
+            {drawerLoading || (drawer.mode === 'convert' && accessLoading) ? <AtsLoader fullHeight={false} label="Loading application..." /> : drawer.error ? <div className="applied-drawer-error"><AlertTriangle size={18} />{drawer.error}</div> : drawer.mode === 'details' ? (
               <div className="applied-drawer-body">
                 <div className="applied-context-grid">{applicationDetails(drawer.row).map(([label, value]) => <div key={label}><span>{label}</span><strong>{display(value)}</strong></div>)}</div>
                 <div className="applied-drawer-actions">
@@ -723,3 +723,4 @@ export default function AppliedCandidatesPage() {
 function ConversionField({ label, required = false, missing = false, error = '', full = false, children }) {
   return <label className={`applied-conversion-field${full ? ' is-full' : ''}${missing ? ' is-missing' : ''}${error ? ' is-error' : ''}`}><span>{label}{required && <b>*</b>}{missing && <em>Missing</em>}</span>{children}{error && <small>{error}</small>}</label>
 }
+

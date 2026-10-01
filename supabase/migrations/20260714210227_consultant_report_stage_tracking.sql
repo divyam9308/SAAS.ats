@@ -99,3 +99,4 @@ on conflict (page_key) do nothing;
 -- jobs(mandate_status). The report aggregates all association stages in one
 -- pass, so composite and per-stage partial indexes would add write cost without
 -- serving its query shape and are intentionally not duplicated here.
+

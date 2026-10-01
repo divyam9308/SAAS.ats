@@ -60,3 +60,4 @@ export default function ReportKpiCard({ label, value, tone = 'blue', compact = f
     </article>
   )
 }
+

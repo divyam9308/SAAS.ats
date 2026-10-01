@@ -13,7 +13,7 @@ import FloatingDropdown from '../components/FloatingDropdown'
 import TablePopover from '../components/TablePopover'
 import CompactPagination from '../components/CompactPagination'
 import FormattedDateInput from '../components/FormattedDateInput'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import { AttachmentList, DocumentIconGroup } from '../components/DocumentAttachments'
 import '../styles/Shared.css'
 import { supabase } from '../services/supabaseClient'
@@ -25,6 +25,7 @@ import { highlightText } from '../utils/aiFilterUi'
 import { formatDateDDMMYYYY } from '../utils/dateFormat'
 import { parseDashboardFiltersFromUrl } from '../utils/dashboardDrilldown'
 import { ConsultantPill } from '../components/ConsultantPill'
+import { companyConfig } from '../config/companyConfig'
 
 const STATUSES = ['Active', 'Inactive', 'Converted', 'Not Converted', 'Follow Up Required', 'Not Hiring', 'Not Adding Consultants', "Didn't Pick Up"]
 const STATUS_OPTIONS = ['', ...STATUSES]
@@ -37,7 +38,7 @@ const STATUS_BADGE_MAP = {
   "Didn't Pick Up": 'badge-didnt-pick-up'
 }
 const TERMS = ['%', 'Fixed Fee Model', 'Slab %', 'Any Other']
-const BILLING_ENTITIES = ['FCS', 'FCAPL']
+const BILLING_ENTITIES = companyConfig.billing.entities.map(entity => entity.key)
 const REGION_OPTIONS = ['', 'North', 'South', 'East', 'West', 'International']
 const MAX_CONTRACT_SIZE_BYTES = 10 * 1024 * 1024
 const MAX_CONTRACT_FILES_PER_SAVE = 20
@@ -1640,7 +1641,7 @@ export default function ClientsPage() {
               <tbody>
                 <tr className="table-loading-row">
                   <td className="table-loading-cell" colSpan={Math.max(activeColumns.length, 1)}>
-                    <FyndbridgeLoader size={88} label="Loading clients..." className="table-inline-loader" />
+                    <AtsLoader size={88} label="Loading clients..." className="table-inline-loader" />
                   </td>
                 </tr>
               </tbody>

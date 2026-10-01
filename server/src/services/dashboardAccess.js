@@ -61,3 +61,4 @@ async function setDashboardVisibility(settings = {}) {
 }
 
 module.exports = { getDashboardAccess, getDashboardVisibility, setDashboardVisibility, normalizeLowMandateAudience }
+

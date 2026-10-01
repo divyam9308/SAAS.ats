@@ -83,3 +83,4 @@
 .auth-shell-skeleton-cards span{height:112px}.auth-shell-skeleton-panel{height:300px;margin-top:18px}
 @keyframes auth-shell-shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @media(max-width:720px){.auth-shell-skeleton-cards{grid-template-columns:1fr}.auth-shell-skeleton-content{padding:22px 16px}}
+

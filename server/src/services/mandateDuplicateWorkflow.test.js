@@ -51,3 +51,4 @@ test('each duplicate mandate receives a newly allocated, database-unique JB ID',
 test('duplicate mandate diagnostics preserve the caller RLS context', () => {
   assert.match(secureViewMigration, /alter view public\.data_issue_duplicate_jobs[\s\S]*security_invoker = true/i)
 })
+

@@ -5,3 +5,4 @@ require('../server/node_modules/dotenv').config({ path: path.join(__dirname, '..
 const app = require('../server/src/app')
 
 module.exports = app
+

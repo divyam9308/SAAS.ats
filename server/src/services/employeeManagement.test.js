@@ -107,3 +107,4 @@ test('shared staff directory exposes all historical assignees and Active-only ch
   assert.match(staffDirectory, /staff: mergedStaff, selectableStaff/)
   assert.match(staffDirectory, /employee\.status === 'active'/)
 })
+

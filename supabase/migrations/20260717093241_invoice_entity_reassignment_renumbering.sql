@@ -147,3 +147,4 @@ revoke all on function public.update_invoice_with_reassigned_sequence(uuid, json
 
 grant execute on function public.update_invoice_with_reassigned_sequence(uuid, jsonb, text)
   to service_role;
+

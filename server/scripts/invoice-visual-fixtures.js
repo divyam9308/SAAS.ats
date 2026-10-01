@@ -199,3 +199,4 @@ function renderPayloadForCase(definition) {
 }
 
 module.exports = { CASES, DISPLAY_ENTITY_BASE, renderPayloadForCase }
+

@@ -55,3 +55,4 @@ from public.candidates
 where candidate_display_id is not null
 group by candidate_display_id
 having count(*) > 1;
+

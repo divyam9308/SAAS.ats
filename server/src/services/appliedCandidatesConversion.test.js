@@ -534,3 +534,4 @@ test('main candidates table shows the public-application marker as a dot beside 
   assert.match(sharedCss, /\.candidate-public-source-dot\s*\{[\s\S]*width:\s*7px;[\s\S]*border-radius:\s*50%;[\s\S]*background:\s*#dc3545;/)
   assert.doesNotMatch(sharedCss, /candidate-public-application-row/)
 })
+

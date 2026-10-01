@@ -80,3 +80,4 @@ test('automatic RLS event trigger is fully tracked by the migration', () => {
     /create event trigger ensure_rls[\s\S]*on ddl_command_end[\s\S]*execute function public\.rls_auto_enable\(\)/i
   )
 })
+

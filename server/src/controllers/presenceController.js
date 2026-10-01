@@ -154,3 +154,4 @@ async function offline(req, res) {
 }
 
 module.exports = { listPresence, heartbeat, offline }
+

@@ -89,3 +89,4 @@ export default function OnlineUsersStrip({ users = [], showAttendance = false })
     {active ? createPortal(<div className="online-users-tooltip" style={tooltipPosition(active.rect)} role="tooltip"><UserDetails user={active.user} /></div>, document.body) : null}
   </section>
 }
+

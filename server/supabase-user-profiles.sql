@@ -15,3 +15,4 @@ create table if not exists public.user_profiles (
 create index if not exists user_profiles_email_idx
   on public.user_profiles(email);
 
+

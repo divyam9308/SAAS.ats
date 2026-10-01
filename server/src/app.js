@@ -1,7 +1,9 @@
 const express = require('express')
 const cors = require('cors')
-const attachUser = require('./middleware/authMiddleware')
-const requireAuth = require('./middleware/requireAuth')
+const platformMode = process.env.PLATFORM_MODE === 'true'
+const { companyConfig, moduleEnabled } = platformMode
+  ? { companyConfig: null, moduleEnabled: () => false }
+  : require('./config/companyConfig')
 
 const app = express()
 
@@ -19,12 +21,15 @@ app.use((req, res, next) => {
   next()
 })
 
-// Allow requests from the deployed Vercel frontend, any *.vercel.app domain,
-// and localhost for local development.
+const configuredOrigins = platformMode ? [] : [
+  ...(companyConfig.deployment?.corsOrigins || []),
+  ...(process.env.ALLOWED_CORS_ORIGINS || '').split(',')
+].map(value => String(value).trim()).filter(Boolean)
 const ALLOWED_ORIGINS = [
-  process.env.FRONTEND_URL,          // e.g. https://fyndbridge.vercel.app
-  /\.vercel\.app$/,                   // any Vercel preview URL
-  /^http:\/\/localhost(:\d+)?$/       // local dev
+  ...(platformMode ? [] : [process.env.FRONTEND_URL]),
+  ...(!platformMode && companyConfig.deployment?.frontendUrl ? [companyConfig.deployment.frontendUrl] : []),
+  ...configuredOrigins,
+  ...(platformMode ? [/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/] : (process.env.NODE_ENV === 'production' ? [] : [/^http:\/\/localhost(:\d+)?$/]))
 ].filter(Boolean)
 
 app.use(cors({
@@ -40,31 +45,49 @@ app.use(cors({
 }))
 
 app.use(express.json())
-app.get('/share/open-roles/:slug', require('./controllers/publicRolesController').shareOpenRole)
-app.use('/api/public', require('./routes/publicRoles'))
+if (platformMode) {
+  const { createPlatformRouter } = require('./platform')
+  const platformRouter = createPlatformRouter({ schedulerEnabled: process.env.NODE_ENV !== 'test' && process.env.PLATFORM_REMINDERS !== 'false' })
+  app.locals.platformClose = () => platformRouter.close?.()
+  app.use('/api/platform', platformRouter)
+  app.get('/api/health', (req, res) => res.json({ status: 'ok', mode: 'platform-local' }))
+  app.use('/api', (req, res) => res.status(404).json({ error: 'This API is not part of the local platform runtime.' }))
+} else if (process.env.LOCAL_DEMO_MODE === 'true') {
+  app.use('/api', require('./local/localDemoRouter'))
+} else {
+const attachUser = require('./middleware/authMiddleware')
+const requireAuth = require('./middleware/requireAuth')
+const requireModule = require('./middleware/moduleEnabled')
+if (moduleEnabled('publicRoles') && companyConfig.publicCareers?.enabled) {
+  app.get('/share/open-roles/:slug', require('./controllers/publicRolesController').shareOpenRole)
+  app.use('/api/public', require('./routes/publicRoles'))
+}
 app.use(attachUser)
 
-app.use('/api/candidates', requireAuth, require('./routes/candidates'))
-app.use('/api/applied-candidates', requireAuth, require('./routes/appliedCandidates'))
-app.use('/api/resumes', requireAuth, require('./routes/resumes'))
-app.use('/api/documents', requireAuth, require('./routes/documents'))
-app.use('/api/clients', requireAuth, require('./routes/clients'))
-app.use('/api/jobs', requireAuth, require('./routes/jobs'))
-app.use('/api/dashboard', requireAuth, require('./routes/dashboard'))
-app.use('/api/notifications', requireAuth, require('./routes/notifications'))
-app.use('/api/admin', requireAuth, require('./routes/admin'))
-app.use('/api/performance', requireAuth, require('./routes/performance'))
-app.use('/api/attendance', requireAuth, require('./routes/attendance'))
-app.use('/api/reports', requireAuth, require('./routes/reports'))
-app.use('/api/user-manual', requireAuth, require('./routes/userManual'))
+const secureModule = (route, moduleKey, router) => app.use(route, requireAuth, requireModule(moduleKey), router)
+
+secureModule('/api/candidates', 'candidates', require('./routes/candidates'))
+secureModule('/api/applied-candidates', 'applications', require('./routes/appliedCandidates'))
+secureModule('/api/resumes', 'candidates', require('./routes/resumes'))
+secureModule('/api/documents', 'candidates', require('./routes/documents'))
+secureModule('/api/clients', 'clients', require('./routes/clients'))
+secureModule('/api/jobs', 'jobs', require('./routes/jobs'))
+secureModule('/api/dashboard', 'dashboard', require('./routes/dashboard'))
+secureModule('/api/notifications', 'notifications', require('./routes/notifications'))
+secureModule('/api/admin', 'admin', require('./routes/admin'))
+secureModule('/api/performance', 'performance', require('./routes/performance'))
+secureModule('/api/attendance', 'attendance', require('./routes/attendance'))
+secureModule('/api/reports', 'reports', require('./routes/reports'))
+secureModule('/api/user-manual', 'userManual', require('./routes/userManual'))
 app.use('/api/presence', requireAuth, require('./routes/presence'))
-app.use('/api/invoice', requireAuth, require('./routes/invoice'))
-app.use('/api/gst', requireAuth, require('./routes/gst'))
-app.use('/api/auth', require('./routes/auth'))
+secureModule('/api/invoice', 'invoices', require('./routes/invoice'))
+secureModule('/api/gst', 'invoices', require('./routes/gst'))
+app.use('/api/auth', requireAuth, require('./routes/auth'))
 app.use('/api/user-preferences', requireAuth, require('./routes/userPreferences'))
 app.use('/api/user-profiles', requireAuth, require('./routes/userProfiles'))
-app.use('/api/ai', requireAuth, require('./routes/ai'))
+secureModule('/api/ai', 'aiParsing', require('./routes/ai'))
+}
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
+if (!platformMode) app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 
 module.exports = app

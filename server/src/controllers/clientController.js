@@ -21,6 +21,8 @@ const {
 } = require('../services/clientGroups')
 const { normalizeAttachments, parseArray, removalPlan } = require('../services/documentAttachments')
 const { removeDocuments, removeUnreferencedDocuments } = require('../services/documentStorage')
+const { companyConfig } = require('../config/companyConfig')
+const CLIENT_ID_PREFIX = companyConfig.ids.clientPrefix
 const {
   assertReservedUploadsExist,
   createContractUploadReservation,
@@ -166,11 +168,11 @@ function isClientDisplayIdUniqueError(err) {
 }
 
 function sortClientRows(rows, sort) {
-  if (!sort.field) return rows.sort((a, b) => displayIdNumber(a.client_display_id, 'CL') - displayIdNumber(b.client_display_id, 'CL'))
+  if (!sort.field) return rows.sort((a, b) => displayIdNumber(a.client_display_id, CLIENT_ID_PREFIX) - displayIdNumber(b.client_display_id, CLIENT_ID_PREFIX))
   const direction = sort.direction === 'desc' ? -1 : 1
   return [...rows].sort((a, b) => {
     if (sort.field === 'client_id') {
-      return compareDisplayIds(a.client_display_id, b.client_display_id, 'CL') * direction
+      return compareDisplayIds(a.client_display_id, b.client_display_id, CLIENT_ID_PREFIX) * direction
     }
     return compareText(a.client_name || a.name, b.client_name || b.name) * direction
   })
@@ -184,15 +186,15 @@ async function ensureClientDisplayIds() {
 
   if (error) throw error
 
-  const usedDisplayIds = new Set((data || []).map((client) => displayIdNumber(client.client_display_id, 'CL')).filter((number) => number < Number.MAX_SAFE_INTEGER))
-  let next = displayIdNumber(nextFreeDisplayId(data, 'CL', true), 'CL')
+  const usedDisplayIds = new Set((data || []).map((client) => displayIdNumber(client.client_display_id, CLIENT_ID_PREFIX)).filter((number) => number < Number.MAX_SAFE_INTEGER))
+  let next = displayIdNumber(nextFreeDisplayId(data, CLIENT_ID_PREFIX, true), CLIENT_ID_PREFIX)
 
   for (const client of data || []) {
     const current = clean(client.client_display_id)
     if (current) continue
     while (usedDisplayIds.has(next)) next += 1
-    const displayId = `CL${next++}`
-    usedDisplayIds.add(displayIdNumber(displayId, 'CL'))
+    const displayId = `${CLIENT_ID_PREFIX}${next++}`
+    usedDisplayIds.add(displayIdNumber(displayId, CLIENT_ID_PREFIX))
     const { error: updateError } = await supabase.from('clients').update({ client_display_id: displayId }).eq('id', client.id)
     if (isClientDisplayIdUniqueError(updateError)) return
     if (updateError) throw updateError
@@ -200,7 +202,7 @@ async function ensureClientDisplayIds() {
 }
 
 async function nextClientDisplayId() {
-  return allocateNextDisplayId({ supabase, table: 'clients', column: 'client_display_id', prefix: 'CL' })
+  return allocateNextDisplayId({ supabase, table: 'clients', column: 'client_display_id', prefix: CLIENT_ID_PREFIX })
 }
 
 function parseJsonFilter(value) {

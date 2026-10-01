@@ -19,3 +19,4 @@ ON public.notifications (
   COALESCE(client_id, '00000000-0000-0000-0000-000000000000'::uuid)
 )
 WHERE action_type IN ('assignment_read_confirmation', 'candidate_assignment_read_confirmation', 'client_assignment_read_confirmation');
+

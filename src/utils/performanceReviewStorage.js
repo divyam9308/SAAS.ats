@@ -69,3 +69,4 @@ export function isPerformanceColumnHidden(permissions, columnKey, isSuperAdmin) 
 export function isPerformanceColumnDisabled(permissions, columnKey, isSuperAdmin) {
   return !isSuperAdmin && permissions?.[columnKey] === 'super_admin_disabled'
 }
+

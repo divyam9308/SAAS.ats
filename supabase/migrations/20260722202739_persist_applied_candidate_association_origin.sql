@@ -24,3 +24,4 @@ comment on column public.candidate_associations.from_applied_candidates is
   'Durable association-level provenance. True only when this candidate-mandate row was created through Applied Candidates.';
 
 commit;
+

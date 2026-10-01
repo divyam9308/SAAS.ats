@@ -78,3 +78,4 @@ export const validateDocumentSelection = (fileList, {
   }
   return { accepted, errors }
 }
+

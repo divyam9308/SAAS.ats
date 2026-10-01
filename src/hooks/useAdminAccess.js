@@ -229,3 +229,4 @@ export function notifyAdminPermissionsChanged() {
   window.dispatchEvent(new Event(PERMISSIONS_CHANGED_EVENT))
   refreshPermissions(true).catch(() => null)
 }
+

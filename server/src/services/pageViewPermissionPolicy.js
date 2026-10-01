@@ -6,3 +6,4 @@ function allowsPageView(permission, { isAdmin = false, isSuperAdmin = false } = 
 }
 
 module.exports = { allowsPageView }
+

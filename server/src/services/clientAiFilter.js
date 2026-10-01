@@ -8,6 +8,7 @@ const {
   createEntityFilter,
   normalizeWords
 } = require('./entityAiFilterCore')
+const { billingEntities } = require('../config/companyConfig')
 
 const CLIENT_STATUSES = [
   'Active',
@@ -138,7 +139,7 @@ const CLIENT_FIELDS = {
     booleanAliases: { true: ['uploaded', 'available', 'present', 'attached'], false: ['missing', 'absent', 'not uploaded', 'unavailable', 'no contract document'] }
   }),
   value: field('money', ['ai_terms_value_amount'], ['contract value', 'commercial value', 'account value', 'revenue value', 'client value', 'value'], NUMBER_OPERATORS, { unit: 'absolute INR', derived: true }),
-  billing_entity: field('enum', ['billing_entity'], ['legal billing entity', 'billing entity'], ENUM_OPERATORS, { values: ['FCS', 'FCAPL'] }),
+  billing_entity: field('enum', ['billing_entity'], ['legal billing entity', 'billing entity'], ENUM_OPERATORS, { values: billingEntities().map(entity => entity.key) }),
   created_at: field('date', ['created_at'], ['client created', 'created date', 'added date', 'created at'], DATE_OPERATORS, { timestamp: true }),
   updated_at: field('date', ['updated_at'], ['client updated', 'updated date', 'modified date', 'updated at'], DATE_OPERATORS, { timestamp: true })
 }

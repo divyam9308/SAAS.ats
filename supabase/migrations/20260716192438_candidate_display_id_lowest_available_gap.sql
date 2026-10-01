@@ -45,3 +45,4 @@ create trigger candidates_display_id_before_insert
 before insert on public.candidates
 for each row
 execute function public.assign_candidate_display_id();
+

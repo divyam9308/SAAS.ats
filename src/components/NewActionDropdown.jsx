@@ -41,3 +41,4 @@ export default function NewActionDropdown({ onUploadResumes, onAddCandidate, onA
     </div>
   )
 }
+

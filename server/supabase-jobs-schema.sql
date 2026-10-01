@@ -107,3 +107,4 @@ create index if not exists candidate_associations_client_id_idx
 
 create index if not exists candidate_associations_job_id_idx
   on public.candidate_associations(job_id);
+

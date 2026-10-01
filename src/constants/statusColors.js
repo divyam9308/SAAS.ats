@@ -46,3 +46,4 @@ export function getStatusColor(status) {
 export const getClientStatusColor = getStatusColor
 export const getCandidateStatusColor = getStatusColor
 export const getMandateStatusColor = getStatusColor
+

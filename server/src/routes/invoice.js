@@ -21,3 +21,4 @@ router.put('/invoices/:id/regenerate', controller.regenerate)
 router.delete('/invoice-pdf-versions/:id', controller.deletePdfVersion)
 
 module.exports = router
+

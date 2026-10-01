@@ -33,3 +33,4 @@ with check (
   and name ~ '^[0-9]{4}/'
   and lower(right(name, 4)) = '.pdf'
 );
+

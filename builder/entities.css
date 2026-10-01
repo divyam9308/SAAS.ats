@@ -1,0 +1,27 @@
+.entity-card {
+  padding: 15px;
+  border: 1px solid #e3e7ef;
+  border-radius: 12px;
+  background: #fbfcff;
+}
+
+.entity-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.entity-card-head strong {
+  font-size: 12px;
+}
+
+.entity-card .form-grid {
+  gap: 12px;
+}
+
+.icon-button:disabled,
+.toggle input:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}

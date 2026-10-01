@@ -112,3 +112,4 @@ begin
     create policy column_permissions_realtime_select_authenticated on public.column_permissions for select to authenticated using (true);
   end if;
 end $$;
+

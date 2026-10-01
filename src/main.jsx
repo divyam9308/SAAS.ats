@@ -5,14 +5,17 @@ import './index.css'
 import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import { installApiFetchInterceptor } from './services/apiClient'
+import { applyCompanyBranding } from './config/companyConfig'
+import { isLocalDemo } from './services/supabaseClient'
 
 installApiFetchInterceptor()
+applyCompanyBranding()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppErrorBoundary>
       <App />
-      <SpeedInsights />
+      {!isLocalDemo && <SpeedInsights />}
     </AppErrorBoundary>
   </StrictMode>,
 )

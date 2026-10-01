@@ -75,3 +75,4 @@ test('bulk resume upload parses five files concurrently', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../controllers/resumeController.js'), 'utf8')
   assert.match(source, /runLimited\(files,\s*5,\s*parseOne\)/)
 })
+

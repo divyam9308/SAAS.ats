@@ -28,3 +28,4 @@ module.exports = {
   mandateExecutionFilter: mandateIntent.executionFilter,
   parseMandateIntent: mandateIntent.parseIntent
 }
+

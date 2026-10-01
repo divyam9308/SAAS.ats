@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ATS Platform Builder</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark">ATS</span><div><strong>Platform Builder</strong><small>Local company setup</small></div></div>
+      <div class="header-actions"><button id="save-draft" class="text-button" type="button">Save draft</button><button id="import-trigger" class="text-button" type="button">Import</button><input id="import-file" type="file" accept="application/json,.json" hidden><button id="export" class="text-button" type="button">Export</button><a href="http://127.0.0.1:5173/platform/settings">Open platform settings ↗</a></div>
+    </header>
+    <section class="intro"><p class="eyebrow">LOCAL CONFIGURATION</p><h1>Build your company’s ATS</h1><p>Choose how your organization hires. Every selection becomes active configuration in the generated local workspace.</p></section>
+    <section class="builder-layout">
+      <aside class="stepper" aria-label="Setup progress">
+        <div class="progress-copy"><strong id="progress-label">Step 1 of 6</strong><span id="progress-percent">17% complete</span></div>
+        <div class="progress-track"><span id="progress-bar"></span></div>
+        <nav id="steps"></nav>
+        <button id="reset-all" class="danger-link" type="button">Reset entire setup</button>
+      </aside>
+      <div class="editor-preview-layout">
+        <section class="wizard card" aria-label="Company ATS configuration editor">
+          <div id="step-content"></div>
+          <div id="status" role="status" aria-live="polite"></div>
+          <footer class="wizard-footer"><button id="back" class="button secondary" type="button">Back</button><div><button id="reset-step" class="button quiet" type="button">Reset section</button><button id="next" class="button primary" type="button">Continue</button></div></footer>
+        </section>
+        <aside class="live-preview card" aria-label="Live ATS preview">
+          <div class="preview-toolbar"><div><span class="preview-eyebrow">LIVE DRAFT</span><h2>Workspace preview</h2></div><label class="preview-page-label" for="preview-page">Preview page<select id="preview-page" aria-label="Choose ATS page to preview"><option value="auto">Follow setup section</option><option value="dashboard">Dashboard</option><option value="jobs">Jobs</option><option value="candidates">Candidates</option><option value="pipeline">Pipeline</option><option value="careers">Careers site</option></select></label></div>
+          <div id="preview-frame" class="preview-frame" aria-live="polite" aria-label="ATS page preview"></div>
+          <p class="preview-caption">Preview updates as you edit. It shows this draft before it is applied to your local ATS.</p>
+        </aside>
+      </div>
+    </section>
+    <section id="result" class="result card hidden" aria-live="polite"><div><strong>Workspace generated</strong><p id="result-copy"></p></div><a id="download" class="button primary" href="#">Download workspace</a></section>
+    <footer class="page-footer">Generated instances use SQLite, local file storage and clearly labelled mock authentication. No cloud account is required.</footer>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

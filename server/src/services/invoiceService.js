@@ -1,54 +1,34 @@
 const fs = require('fs')
 const path = require('path')
 const PDFDocument = require('pdfkit')
+const { companyConfig, billingEntities, billingEntity, financialYearStartMonth } = require('../config/companyConfig')
 
 const MODELS = new Set(['joining_percentage', 'joining_flat_fee', 'retainer', 'jra_adjustment_percentage', 'jra_adjustment_flat_fee', 'project', 'others'])
 const GST_COMPONENTS = new Set(['IGST', 'CGST_SGST'])
-const BILLING_ENTITIES = new Set(['FCS', 'FCAPL'])
+const BILLING_ENTITIES = new Set(billingEntities().map(entity => entity.key))
 const INVOICE_TYPES = new Set(['tax_invoice', 'proforma_invoice'])
 
-const COMPANY = {
-  FCS: {
-    name: 'FyndBridge Consulting Services',
-    address: ['Ground Floor, 20, New Delhi,', 'Okhla Industrial Estate Phase 3, New Delhi,', 'South East Delhi,', 'Delhi, 110020'],
-    mobile: '9717773066',
-    email: 'partner@fyndbridge.in',
-    state: 'Delhi',
-    stateCode: '07',
-    gstin: '07AAJFF1433D1ZV',
-    cin: '',
-    pan: 'AAJFF1433D',
-    bank: {
-      name: 'ICICI Bank Limited',
-      account: '102305501028',
-      ifsc: 'ICIC0001023',
-      branch: '233 Okhla Industrial Estate, New Delhi - 110020'
-    },
-    reverseCharge: 'Our Payments on reverse charge basis: No',
-    prefix: 'FB',
-    feeLabel: 'Professional Fee'
+const COMPANY = Object.fromEntries(billingEntities().map(entity => [entity.key, {
+  key: entity.key,
+  name: entity.name,
+  address: entity.address || [],
+  mobile: entity.phone || companyConfig.company.phone,
+  email: entity.email || companyConfig.company.supportEmail,
+  state: entity.state || companyConfig.company.address.state,
+  stateCode: entity.stateCode || '',
+  gstin: entity.gstin || '',
+  cin: entity.cin || '',
+  pan: entity.pan || '',
+  bank: {
+    name: entity.bank?.name || '',
+    account: String(entity.bank?.accountNumber || ''),
+    ifsc: entity.bank?.ifsc || '',
+    branch: entity.bank?.branch || ''
   },
-  FCAPL: {
-    name: 'FyndBridge Consultants & Advisors Private Limited',
-    address: ['Second Floor, House No- A-34,', 'Pocket A-8, Kalkaji Extension, Behind', 'Aggarwal Sweet House, New Delhi,', 'South East Delhi, Delhi - 110019'],
-    mobile: '9717773066',
-    email: 'partner@fyndbridge.in',
-    state: 'Delhi',
-    stateCode: '07',
-    gstin: '07AAFCF8821L1ZA',
-    cin: 'U70200DL2024PTC429251',
-    pan: 'AAFCF8821L',
-    bank: {
-      name: 'State Bank of India',
-      account: '42926962136',
-      ifsc: 'SBIN0000727',
-      branch: '233 Okhla Industrial Estate, New Delhi - 110020'
-    },
-    reverseCharge: 'Our Payments on reverse charge basis: No',
-    prefix: 'FCAPL',
-    feeLabel: 'Professional Fee'
-  }
-}
+  reverseCharge: 'Tax payable on reverse charge basis: No',
+  prefix: entity.invoicePrefix,
+  feeLabel: entity.feeLabel || 'Professional Fee'
+}]))
 
 const BLACK = '#000000'
 const REGULAR_FONT = 'InvoiceRegular'
@@ -269,7 +249,7 @@ function percentageOfPaise(amountPaise, rate) {
 
 function financialYear(dateValue) {
   const date = new Date(`${dateValue}T00:00:00`)
-  const year = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1
+  const year = date.getMonth() >= financialYearStartMonth() - 1 ? date.getFullYear() : date.getFullYear() - 1
   return `${String(year).slice(-2)}-${String(year + 1).slice(-2)}`
 }
 
@@ -282,9 +262,10 @@ function normalizeStateCode(value) {
 
 function detectGstComponent(stateCode, ...values) {
   const normalizedCode = normalizeStateCode(stateCode)
-  if (normalizedCode) return normalizedCode === '07' ? 'CGST_SGST' : 'IGST'
+  const home = billingEntity([...BILLING_ENTITIES][0])
+  if (normalizedCode) return normalizedCode === String(home?.stateCode || '').padStart(2, '0') ? 'CGST_SGST' : 'IGST'
   const text = [stateCode, ...values].map(clean).join(' ').toLowerCase()
-  return /\b(new\s+delhi|delhi|south east delhi|north delhi|south delhi|east delhi|west delhi|central delhi)\b/.test(text) ? 'CGST_SGST' : 'IGST'
+  return home?.state && text.includes(String(home.state).toLowerCase()) ? 'CGST_SGST' : 'IGST'
 }
 
 function validateNonNegative(input, fields, message) {
@@ -551,7 +532,8 @@ function hasRounding(invoice) {
 }
 
 function selectInvoiceLayout(invoice) {
-  const billing = BILLING_ENTITIES.has(invoice.billing_entity) ? invoice.billing_entity : 'FCS'
+  const requested = BILLING_ENTITIES.has(invoice.billing_entity) ? invoice.billing_entity : [...BILLING_ENTITIES][0]
+  const billing = INVOICE_LAYOUTS[`${requested}_CGST_SGST`] ? requested : 'FCS'
   if (invoice.gst_component === 'CGST_SGST') return INVOICE_LAYOUTS[`${billing}_CGST_SGST`]
   return INVOICE_LAYOUTS[`${billing}_IGST_${hasRounding(invoice) ? 'ROUND' : 'NO_ROUND'}`]
 }
@@ -609,6 +591,17 @@ function drawInvoiceRules(doc, layout) {
 let cachedInvoiceLogo
 function invoiceLogoBuffer() {
   if (cachedInvoiceLogo) return cachedInvoiceLogo
+  const configured = String(companyConfig.branding.horizontalLogo || '')
+  if (/^data:image\/(?:png|jpe?g);base64,/i.test(configured)) {
+    cachedInvoiceLogo = Buffer.from(configured.split(',')[1], 'base64')
+    return cachedInvoiceLogo
+  }
+  const publicLogo = configured.startsWith('/') ? path.resolve(__dirname, '../../../public', configured.slice(1)) : ''
+  if (publicLogo && /\.(?:png|jpe?g)$/i.test(publicLogo) && fs.existsSync(publicLogo)) {
+    cachedInvoiceLogo = fs.readFileSync(publicLogo)
+    return cachedInvoiceLogo
+  }
+  if (companyConfig.slug !== 'fyndbridge') return null
   const logoPath = path.join(__dirname, '../../assets/invoice-reference-logo.base64')
   if (!fs.existsSync(logoPath)) return null
   cachedInvoiceLogo = Buffer.from(fs.readFileSync(logoPath, 'utf8').trim(), 'base64')
@@ -620,6 +613,7 @@ function drawHeader(doc, layout, entity, invoice, company) {
   const logo = invoiceLogoBuffer()
   const heading = invoice.invoice_type === 'proforma_invoice' ? 'PROFORMA INVOICE' : 'TAX INVOICE'
   if (logo) doc.image(logo, layout.logo.x, layout.logo.y, { fit: [layout.logo.width, layout.logo.height], align: 'left', valign: 'center' })
+  else textBox(doc, companyConfig.company.shortName, x.left, y.top, x.split - x.left, y.header - y.top, { bold: true, size: layout.titleSize, minSize: 9, singleLine: true, valign: 'center' })
   textBox(doc, heading, x.split, y.top, x.right - x.split, y.header - y.top, {
     bold: true, size: layout.titleSize, minSize: layout.titleSize - 1.4, align: 'right', singleLine: true, valign: 'center', paddingX: 2.2
   })
@@ -701,13 +695,11 @@ function drawIssuerDetails(doc, layout, company) {
   textBox(doc, 'FROM:', left, labelOptions.y, width, labelOptions.height, { bold: true, size: layout.metaSize, singleLine: true, paddingX: detailPaddingX, valign: labelOptions.valign })
   textBox(doc, company.name, left, nameOptions.y, width, nameOptions.height, { bold: true, size: layout.metaSize, minSize: body - 1.2, singleLine: true, paddingX: detailPaddingX, valign: nameOptions.valign })
   const addressLines = [`Regd Office: ${company.address[0]}`, ...company.address.slice(1)]
-  const stateLines = company === COMPANY.FCAPL
-    ? [`State Code: ${company.stateCode}`, `State: ${company.state}`]
-    : [`State: ${company.state}`, `State Code: ${company.stateCode}`]
+  const stateLines = [`State: ${company.state}`, `State Code: ${company.stateCode}`]
   const issuerLines = [
     ...addressLines,
     `Mobile: ${company.mobile}`,
-    company.name === COMPANY.FCS.name ? '' : null,
+    null,
     `Email: ${company.email}`,
     ...stateLines,
     `GSTIN: ${company.gstin}`,
@@ -863,7 +855,7 @@ function renderInvoicePdf({ entity, invoice, overrides = {} }) {
     const title = invoice.invoice_type === 'proforma_invoice' ? 'Proforma Invoice' : 'Tax Invoice'
     const doc = new PDFDocument({
       size: [A4_WIDTH, A4_HEIGHT], margin: 0, autoFirstPage: true, compress: true,
-      info: { Title: `${title} ${clean(invoice.invoice_number)}`, Author: 'FyndBridge', Creator: 'FyndBridge ATS', Producer: 'PDFKit' }
+      info: { Title: `${title} ${clean(invoice.invoice_number)}`, Author: companyConfig.company.displayName, Creator: companyConfig.company.atsProductName, Producer: 'PDFKit' }
     })
     const chunks = []
     let pageCount = 1

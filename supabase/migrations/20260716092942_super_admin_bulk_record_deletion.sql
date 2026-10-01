@@ -736,3 +736,4 @@ grant execute on function public.admin_bulk_delete_preview(text, uuid[], boolean
   to service_role;
 grant execute on function public.admin_bulk_delete_records(uuid, text, uuid[], boolean)
   to service_role;
+

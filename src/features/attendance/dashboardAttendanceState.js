@@ -57,3 +57,4 @@ export function millisecondsUntilCompanyMidnight(at = Date.now()) {
   )
   return Math.max(1000, nextMidnight - companyNow.getTime())
 }
+

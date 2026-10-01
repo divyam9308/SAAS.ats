@@ -137,3 +137,4 @@ export const DEMO_CLIENTS = CLIENT_SEEDS.map(([name, contact, phone, email, city
   activeJobs: DEMO_JOBS.filter((job) => job.client === name && job.status === 'Ongoing (P1)').length,
   notes: '',
 }))
+

@@ -606,3 +606,4 @@ module.exports = {
   extractCoverLetter,
   extractFields
 }
+

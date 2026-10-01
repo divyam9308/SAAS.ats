@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-const SCRIPT_ID = 'fyndbridge-turnstile-script'
+const SCRIPT_ID = 'ats-turnstile-script'
 const SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
 function loadTurnstileScript() {
@@ -58,3 +58,4 @@ export default function TurnstileWidget({ siteKey, onTokenChange, onError }) {
   if (!siteKey) return null
   return <div className="public-turnstile" ref={containerRef} aria-label="Application verification" />
 }
+

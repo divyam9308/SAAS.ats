@@ -12,6 +12,8 @@ const { isAdmin, getColumnPermissions, stripHiddenFields, assertCanUpdateColumns
 const { assertActiveAssignments } = require('../services/employeeStatus')
 const { resolveClientGroupScope } = require('../services/clientGroups')
 const { MANDATE_STATUSES, normalizeMandateStatus } = require('../services/mandateStatuses')
+const { companyConfig } = require('../config/companyConfig')
+const JOB_ID_PREFIX = companyConfig.ids.jobPrefix
 const {
   PUBLIC_JOB_FIELDS,
   publicJobPayload,
@@ -214,7 +216,7 @@ async function hydrateJobAttachmentRows(rows) {
 }
 
 async function nextJobDisplayId() {
-  return allocateNextDisplayId({ supabase, table: 'jobs', column: 'job_display_id', prefix: 'JB' })
+  return allocateNextDisplayId({ supabase, table: 'jobs', column: 'job_display_id', prefix: JOB_ID_PREFIX })
 }
 
 async function findDuplicateMandate(clientId, title) {

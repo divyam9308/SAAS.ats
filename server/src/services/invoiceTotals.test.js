@@ -61,3 +61,4 @@ test('main invoice response paginates active and cancelled tax-invoice history w
   assert.match(entityList, /invoices: taxInvoices\.map\(invoice => \(\{[\s\S]*pdf_versions:/)
   assert.match(entityList, /totals: aggregateTaxInvoiceTotals\(activeTaxInvoices\)/)
 })
+

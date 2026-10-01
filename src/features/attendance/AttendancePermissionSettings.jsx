@@ -43,3 +43,4 @@ export default function AttendancePermissionSettings({ values, isSuperAdmin, dis
     </section>
   )
 }
+

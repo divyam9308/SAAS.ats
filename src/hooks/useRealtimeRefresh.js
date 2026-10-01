@@ -51,3 +51,4 @@ export function useRealtimeRefresh({ channelName, tables, onChange, enabled = tr
     }
   }, [channelName, debounceMs, debugName, enabled, scope, tableKey])
 }
+

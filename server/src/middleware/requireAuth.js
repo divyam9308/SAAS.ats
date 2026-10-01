@@ -1,8 +1,12 @@
 const { getEmployeeStatus } = require('../services/employeeStatus')
+const { emailAllowed } = require('../config/companyConfig')
 
 async function requireAuth(req, res, next) {
   if (!req.user?.id) {
     return res.status(401).json({ error: 'Unauthorized' })
+  }
+  if (!emailAllowed(req.user.email)) {
+    return res.status(403).json({ code: 'EMAIL_NOT_ALLOWED', error: 'This email account is not permitted.' })
   }
   try {
     const employment = await getEmployeeStatus(req.user.id)

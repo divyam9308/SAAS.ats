@@ -225,3 +225,4 @@ test('parsed resume DTO allowlists candidate-safe fields and omits parser intern
   assert.equal(Object.hasOwn(result, 'confidence'), false)
   assert.equal(Object.hasOwn(result, 'storage_path'), false)
 })
+

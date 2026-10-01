@@ -138,3 +138,4 @@ export function useAttendanceRealtime({ userId, isAdmin, onEvents, enabled = tru
 }
 
 export { ATTENDANCE_REALTIME_TABLES }
+

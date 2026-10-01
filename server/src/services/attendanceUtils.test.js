@@ -48,3 +48,4 @@ test('April applies at most five carried days before adding the new monthly accr
 })
 test('carry forward is capped at five and never converts debt to leave',()=>{assert.equal(calculateCarryForward(8),5);assert.equal(calculateCarryForward(3.5),3.5);assert.equal(calculateCarryForward(0),0);assert.equal(calculateCarryForward(-2),0)})
 test('sandwich leave contributes three projected days while pending',()=>{const x=calculateLeave({startDate:'2026-07-11',endDate:'2026-07-13',durationType:'full_day',holidays:[],balance:5});assert.equal(x.charged_leave_days,3);assert.equal(x.projected_balance,2)})
+

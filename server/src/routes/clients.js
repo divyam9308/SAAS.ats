@@ -19,3 +19,4 @@ router.patch('/:id', controller.updateClient)
 router.delete('/:id', controller.deleteClient)
 
 module.exports = router
+

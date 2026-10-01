@@ -153,3 +153,4 @@ revoke all on public.client_ai_filter_rows from public, anon, authenticated;
 revoke all on public.mandate_ai_filter_rows from public, anon, authenticated;
 grant select on public.client_ai_filter_rows to service_role;
 grant select on public.mandate_ai_filter_rows to service_role;
+

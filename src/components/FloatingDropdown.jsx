@@ -48,3 +48,4 @@ export default function FloatingDropdown({ anchorRect, ignoreElement, onClose, c
     document.body
   )
 }
+

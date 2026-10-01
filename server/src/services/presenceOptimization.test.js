@@ -51,3 +51,4 @@ test('presence realtime publication and channels remain isolated from business r
   assert.match(realtimeRefresh, /nextChannel\.on\('postgres_changes'/)
   assert.doesNotMatch(hook, /table: '(clients|candidates|jobs|notifications|attendance_records)'/)
 })
+

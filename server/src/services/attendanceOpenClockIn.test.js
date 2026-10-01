@@ -24,3 +24,4 @@ test('an open attendance page refreshes personal and team state at the India com
   assert.match(attendancePage, /if\(!isSuperAdmin\)scopes\.push\('personal-attendance'\)/)
   assert.match(attendancePage, /if\(tab==='team'\)scopes\.push\('team'\)/)
 })
+

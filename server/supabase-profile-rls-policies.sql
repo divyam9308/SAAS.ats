@@ -41,3 +41,4 @@ create policy "user_profiles_update_own"
   for update
   using (user_id = auth.uid()::text)
   with check (user_id = auth.uid()::text);
+

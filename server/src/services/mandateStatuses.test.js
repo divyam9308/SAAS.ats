@@ -38,3 +38,4 @@ test('migration backfills legacy Ongoing to full P1 and counts only full P1 for 
   assert.match(statusMigration, /job\.mandate_status[\s\S]*?= 'ongoing \(p1\)'/i)
   assert.match(statusMigration, /check \(mandate_status in \('Ongoing \(P1\)', 'Delivered \(P2\)', 'Paused \(P3\)', 'Completed', 'Scrapped'\)\)/)
 })
+

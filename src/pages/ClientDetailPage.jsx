@@ -12,7 +12,7 @@ import { MANDATE_STATUSES, MANDATE_STATUS_BADGE_MAP, mandateStatusLabel, normali
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh'
 import TablePopover from '../components/TablePopover'
 import FloatingDropdown from '../components/FloatingDropdown'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import { DocumentIconGroup } from '../components/DocumentAttachments'
 import { formatDateDDMMYYYY } from '../utils/dateFormat'
 import { ConsultantPill } from '../components/ConsultantPill'
@@ -675,7 +675,7 @@ export default function ClientDetailPage() {
     }
   }
 
-  if (loading) return <div className="loading-state"><FyndbridgeLoader size={88} label="Loading client metrics..." /></div>
+  if (loading) return <div className="loading-state"><AtsLoader size={88} label="Loading client metrics..." /></div>
 
   if (error || !client) {
     return (
@@ -912,3 +912,4 @@ export default function ClientDetailPage() {
     </div>
   )
 }
+

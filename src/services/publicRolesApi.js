@@ -71,3 +71,4 @@ export async function submitPublicApplication({ roleSlug, resume, applicant, web
 
   return publicJson(`${PUBLIC_API_ROOT}/applications`, { method: 'POST', body })
 }
+

@@ -1,4 +1,5 @@
 const supabase = require('./supabaseAdmin')
+const { companyConfig } = require('../config/companyConfig')
 const { isAdmin, isSuperAdmin } = require('./adminAccess')
 const { listEmployeeDirectory } = require('./employeeStatus')
 const attendanceService = require('./attendanceService')
@@ -372,7 +373,7 @@ function metaFor(params, access, user, warnings, generatedAt) {
     requestedEndDate: params.requestedEndDate,
     endDateWasCapped: params.endDateWasCapped,
     generatedAt,
-    generatedBy: user?.name || user?.email || 'FYNDBRIDGE User',
+    generatedBy: user?.name || user?.email || `${companyConfig.company.displayName} User`,
     timezone: COMPANY_TIME_ZONE,
     dateConvention: 'Inclusive local calendar dates; future To dates are capped at today.',
     dateFields: {

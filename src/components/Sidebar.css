@@ -32,6 +32,16 @@
   flex-shrink: 0;
 }
 
+.sidebar-logo-fallback {
+  color: #fff;
+  font-size: 1rem;
+  letter-spacing: .06em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-logo-image {
   display: block;
   width: 255px;

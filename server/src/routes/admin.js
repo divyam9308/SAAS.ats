@@ -31,3 +31,4 @@ router.get('/locked-records', controller.lockedRecords)
 router.patch('/locks/:table/:id', controller.setLock)
 
 module.exports = router
+

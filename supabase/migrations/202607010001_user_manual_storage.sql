@@ -8,3 +8,4 @@ set public = excluded.public,
 insert into public.app_settings (key, value)
 values ('user_manual', '{}'::jsonb)
 on conflict (key) do nothing;
+

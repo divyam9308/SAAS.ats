@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '../services/supabaseClient'
+import { isLocalDemo, supabase } from '../services/supabaseClient'
 import { API_INACTIVE_EVENT, API_UNAUTHORIZED_EVENT, apiFetch } from '../services/apiClient'
 import { logRealtimeRemove, logRealtimeSubscribe } from '../utils/supabaseRealtimeDebug'
 import { AuthContext } from './authStore'
@@ -10,6 +10,7 @@ import { usePageViewPermissions } from '../hooks/usePageViewPermissions'
 import AuthenticatedShellSkeleton from '../components/AuthenticatedShellSkeleton'
 import { preloadAuthenticatedRoute } from '../utils/routePreload'
 import { clearPresenceBeforeLogout } from '../services/presenceSession'
+import { emailAllowed } from '../config/companyConfig'
 
 const DEACTIVATION_MESSAGE = 'Your account has been deactivated. Please contact an administrator.'
 const STATUS_EVENT = 'fb:employee-status-changed'
@@ -161,7 +162,7 @@ export function AuthProvider({ children }) {
         setEmploymentStatusLoading(false)
         return false
       }
-      if (!email.endsWith('@fyndbridge.in')) {
+      if (!isLocalDemo && !emailAllowed(email)) {
         await supabase.auth.signOut()
         clearAuthState()
         navigate('/login?error=domain', { replace: true })

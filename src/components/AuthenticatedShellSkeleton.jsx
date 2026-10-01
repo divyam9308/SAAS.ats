@@ -16,3 +16,4 @@ export default function AuthenticatedShellSkeleton() {
     </div>
   </div>
 }
+

@@ -12,3 +12,4 @@ router.get('/consultant/export-preview', controller.exportPreview)
 router.get('/consultant', controller.report)
 
 module.exports = router
+

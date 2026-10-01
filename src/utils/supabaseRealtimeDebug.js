@@ -29,3 +29,4 @@ export function logRealtimeRemove(name) {
   }
   console.debug('[Supabase Debug] realtime remove', { name, active: activeChannels.size })
 }
+

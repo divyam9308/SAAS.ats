@@ -60,3 +60,4 @@ async function updateHandbook(user, file) {
 }
 
 module.exports = { getHandbook, updateHandbook }
+

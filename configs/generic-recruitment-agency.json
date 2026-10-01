@@ -1,0 +1,404 @@
+{
+  "version": 1,
+  "slug": "generic-recruitment-agency",
+  "company": {
+    "displayName": "Acme Recruitment",
+    "legalName": "Acme Recruitment Private Limited",
+    "shortName": "Acme",
+    "atsProductName": "Acme ATS",
+    "tagline": "People for what comes next",
+    "website": "https://example.com",
+    "supportEmail": "support@example.com",
+    "hrEmail": "hr@example.com",
+    "phone": "+91 00000 00000",
+    "address": {
+      "line1": "Company address",
+      "line2": "",
+      "city": "City",
+      "state": "State",
+      "postalCode": "000000",
+      "country": "India"
+    },
+    "timezone": "Asia/Kolkata",
+    "currency": "INR",
+    "locale": "en-IN",
+    "dateFormat": "DD/MM/YYYY",
+    "financialYearStartMonth": 4
+  },
+  "branding": {
+    "primaryColor": "#172554",
+    "secondaryColor": "#334155",
+    "accentColor": "#0EA5E9",
+    "navigationStyle": "sidebar",
+    "colorMode": "light",
+    "squareLogo": "",
+    "horizontalLogo": "",
+    "favicon": "",
+    "loginHeadline": "Hiring Is Not A Transaction. It's A Transformation.",
+    "loginSubheading": "Your internal command centre for executive search and talent placement.",
+    "footerText": ""
+  },
+  "authentication": {
+    "mode": "any",
+    "allowedDomains": [],
+    "allowedEmails": [],
+    "googleEnabled": true,
+    "passwordEnabled": true
+  },
+  "terminology": {
+    "job": {
+      "singular": "Mandate",
+      "plural": "Mandates"
+    },
+    "consultant": {
+      "singular": "Consultant",
+      "plural": "Consultants"
+    },
+    "client": {
+      "singular": "Client",
+      "plural": "Clients"
+    },
+    "candidate": {
+      "singular": "Candidate",
+      "plural": "Candidates"
+    },
+    "manager": {
+      "singular": "Team Lead",
+      "plural": "Team Leads"
+    },
+    "hiredStage": "Joined"
+  },
+  "modules": {
+    "dashboard": true,
+    "candidates": true,
+    "clients": true,
+    "jobs": true,
+    "applications": true,
+    "publicRoles": true,
+    "reports": true,
+    "attendance": true,
+    "performance": true,
+    "invoices": true,
+    "admin": true,
+    "userManual": true,
+    "aiParsing": true,
+    "notifications": true
+  },
+  "candidate": {
+    "fields": {
+      "fullName": "required",
+      "email": "required",
+      "phone": "required",
+      "city": "optional",
+      "state": "optional",
+      "location": "optional",
+      "designation": "optional",
+      "currentCompany": "optional",
+      "experience": "optional",
+      "noticePeriod": "optional",
+      "relocation": "optional",
+      "skills": "optional",
+      "education": "optional",
+      "cv": "required",
+      "linkedin": "optional",
+      "source": "optional",
+      "salary": "optional",
+      "expectedSalary": "optional",
+      "notes": "optional"
+    },
+    "customFields": []
+  },
+  "clients": {
+    "billingEntityRequired": false,
+    "consultantAssignment": true,
+    "followUps": true,
+    "contractDocuments": true,
+    "statuses": [
+      "Active",
+      "Inactive",
+      "On Hold"
+    ],
+    "contactFields": [
+      "contactPerson",
+      "email",
+      "phone",
+      "designation"
+    ],
+    "contractFields": [
+      "contractDate",
+      "expiryDate",
+      "documents"
+    ],
+    "customNotes": true
+  },
+  "jobs": {
+    "statuses": [
+      "Active",
+      "On Hold",
+      "Closed",
+      "Cancelled"
+    ],
+    "priorities": [
+      "Normal",
+      "High",
+      "Urgent"
+    ],
+    "fields": [
+      "title",
+      "location",
+      "vertical",
+      "experience",
+      "budget",
+      "salary",
+      "teamLead",
+      "skills",
+      "jdDocuments",
+      "openPositions"
+    ],
+    "locations": [],
+    "sectors": [],
+    "publicVisibility": true,
+    "consultantAllocation": true
+  },
+  "pipeline": [
+    {
+      "key": "interested",
+      "label": "Interested",
+      "enabled": true
+    },
+    {
+      "key": "screening",
+      "label": "Screening",
+      "enabled": true
+    },
+    {
+      "key": "shortlisted",
+      "label": "Shortlisted",
+      "enabled": true
+    },
+    {
+      "key": "interview_scheduled",
+      "label": "Interview Scheduled",
+      "enabled": true
+    },
+    {
+      "key": "interviewed",
+      "label": "Interviewed",
+      "enabled": true
+    },
+    {
+      "key": "offer_extended",
+      "label": "Offer Extended",
+      "enabled": true
+    },
+    {
+      "key": "offer_accepted",
+      "label": "Offer Accepted",
+      "enabled": true
+    },
+    {
+      "key": "offer_declined",
+      "label": "Offer Declined",
+      "enabled": true
+    },
+    {
+      "key": "joined",
+      "label": "Joined",
+      "enabled": true
+    },
+    {
+      "key": "rejected",
+      "label": "Rejected",
+      "enabled": true
+    },
+    {
+      "key": "on_hold",
+      "label": "On Hold",
+      "enabled": true
+    },
+    {
+      "key": "duplicate",
+      "label": "Duplicate",
+      "enabled": true,
+      "protected": true
+    }
+  ],
+  "ids": {
+    "candidatePrefix": "CA",
+    "clientPrefix": "CL",
+    "jobPrefix": "JB",
+    "employeePrefix": "EMP"
+  },
+  "billing": {
+    "enabled": false,
+    "taxEnabled": true,
+    "gstEnabled": true,
+    "gstPercentage": 18,
+    "defaultSac": "998512",
+    "invoiceTerms": "Payment due as per agreed terms.",
+    "paymentTerms": "Bank transfer",
+    "paymentDueDays": 30,
+    "roundOff": true,
+    "entities": [
+      {
+        "key": "PRIMARY",
+        "name": "Acme Recruitment Private Limited",
+        "invoicePrefix": "ACME",
+        "proformaPrefix": "PI/ACME",
+        "address": [
+          "Company address"
+        ],
+        "phone": "+91 00000 00000",
+        "email": "billing@example.com",
+        "state": "State",
+        "stateCode": "",
+        "gstin": "",
+        "pan": "",
+        "bank": {
+          "name": "",
+          "accountName": "",
+          "accountNumber": "",
+          "ifsc": "",
+          "swift": "",
+          "branch": "",
+          "upi": ""
+        }
+      }
+    ],
+    "authorizedSignatoryText": "Authorised Signatory",
+    "footerText": "This is a computer-generated invoice."
+  },
+  "attendance": {
+    "workingDays": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "weekendDays": [
+      0
+    ],
+    "leaveTypes": [
+      "Paid Leave",
+      "Sick Leave",
+      "Casual Leave",
+      "Loss of Pay"
+    ],
+    "annualLeaveAllowance": 18,
+    "carryForwardLimit": 5,
+    "leaveAccrualStartMonth": "",
+    "manuallyCreditedLeaveMonths": [],
+    "correctionWorkflow": true,
+    "workingHours": {
+      "start": "09:30",
+      "end": "18:30"
+    }
+  },
+  "performance": {
+    "frequency": "annual",
+    "ratingScale": {
+      "min": 1,
+      "max": 5
+    },
+    "reviewerTerm": "Reviewer",
+    "enabledSections": [
+      "goals",
+      "competencies",
+      "managerComments",
+      "employeeComments"
+    ],
+    "categories": [
+      "Delivery",
+      "Quality",
+      "Collaboration",
+      "Ownership",
+      "Client Management",
+      "Learning",
+      "Leadership"
+    ]
+  },
+  "publicCareers": {
+    "enabled": true,
+    "path": "/open-roles",
+    "headerText": "Open Roles",
+    "companyDescription": "Find your next opportunity.",
+    "privacyText": "Your details and CV are submitted securely for recruitment review.",
+    "exposeClientName": false,
+    "contactEmail": "careers@example.com",
+    "socialLinks": {}
+  },
+  "roles": {
+    "super_admin": [
+      "*"
+    ],
+    "admin": [
+      "*"
+    ],
+    "manager": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "reports",
+      "attendance",
+      "performance"
+    ],
+    "team_lead": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "reports",
+      "attendance"
+    ],
+    "consultant": [
+      "dashboard",
+      "candidates",
+      "clients",
+      "jobs",
+      "applications",
+      "attendance"
+    ],
+    "finance": [
+      "dashboard",
+      "clients",
+      "invoices"
+    ],
+    "hr": [
+      "dashboard",
+      "attendance",
+      "performance",
+      "admin"
+    ],
+    "viewer": [
+      "dashboard"
+    ]
+  },
+  "integrations": {
+    "supabase": true,
+    "googleOAuth": true,
+    "gemini": {
+      "enabled": false,
+      "model": "gemini-3.1-flash-lite"
+    },
+    "turnstile": false
+  },
+  "deployment": {
+    "frontendUrl": "",
+    "corsOrigins": [],
+    "vercelProjectName": ""
+  },
+  "documents": {
+    "contractBucket": "contract-pdfs",
+    "cvBucket": "candidate-cvs",
+    "jdBucket": "job-descriptions",
+    "invoiceBucket": "invoices",
+    "employeeHandbookBucket": "employee-handbook",
+    "userManualBucket": "user-manual",
+    "publicApplicationsBucket": "public-applications"
+  }
+}

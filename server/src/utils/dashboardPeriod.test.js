@@ -60,3 +60,4 @@ test('date-only dashboard filtering preserves local financial-year dates', () =>
     ['lte', 'allocation_date', '2026-07-13']
   ])
 })
+

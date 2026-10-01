@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 const ExcelJS = require('exceljs')
+const { companyConfig } = require('../config/companyConfig')
 const { CANDIDATE_STATUSES } = require('./candidateStatuses')
 const { buildConsultantReportWorkbook } = require('./consultantReportWorkbook')
 
@@ -144,7 +145,7 @@ function mandateFixture() {
 test('builds the aligned five-sheet individual consultant workbook with typed cells', async () => {
   assert.deepEqual([...DAILY_CANDIDATE_STATUS_COLUMNS].sort(), [...CANDIDATE_STATUSES].sort())
   const output = await buildConsultantReportWorkbook({ report: reportFixture(), mandates: [mandateFixture()] })
-  assert.match(output.fileName, /^Fyndbridge_Consultant_Report_Asha_Rao_/)
+  assert.ok(output.fileName.startsWith(`${companyConfig.company.shortName}_Consultant_Report_Asha_Rao_`))
   assert.equal(output.mimeType, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   assert.equal(output.preview.sheets.length, 5)
 

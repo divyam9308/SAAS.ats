@@ -16,8 +16,10 @@ import {
   detectInvoiceGstComponent
 } from '../utils/invoiceModels'
 import { formatInvoiceMoney } from '../utils/invoiceValues'
+import { companyConfig } from '../config/companyConfig'
 
 const show = value => String(value ?? '').trim() || '—'
+const defaultBillingEntity = companyConfig.billing.entities[0]?.key || 'PRIMARY'
 
 function Field({ label, children, full = false }) {
   return <div className={`form-group${full ? ' full' : ''}`}><label className="form-label">{label}</label>{children}</div>
@@ -49,12 +51,12 @@ export function EditInvoiceModal({ invoice, entity, entities, onClose, onSaved }
     ...EMPTY_INVOICE,
     ...invoice,
     invoice_entity_id: initialEntityId,
-    billing_entity: initialSelectedEntity.billing_entity || 'FCS',
-    sac: initialSelectedEntity.sac || '998512',
+    billing_entity: initialSelectedEntity.billing_entity || defaultBillingEntity,
+    sac: initialSelectedEntity.sac || companyConfig.billing.defaultSac,
     gst_component: detectInvoiceGstComponent(initialSelectedEntity),
-    igst_rate: initialSelectedEntity.igst_rate ?? 18,
-    cgst_rate: initialSelectedEntity.cgst_rate ?? 9,
-    sgst_rate: initialSelectedEntity.sgst_rate ?? 9
+    igst_rate: initialSelectedEntity.igst_rate ?? companyConfig.billing.gstPercentage,
+    cgst_rate: initialSelectedEntity.cgst_rate ?? companyConfig.billing.gstPercentage / 2,
+    sgst_rate: initialSelectedEntity.sgst_rate ?? companyConfig.billing.gstPercentage / 2
   })
   const [invoiceNumberPreview, setInvoiceNumberPreview] = useState(invoice.invoice_number)
   const [invoiceNumberLoading, setInvoiceNumberLoading] = useState(true)
@@ -102,12 +104,12 @@ export function EditInvoiceModal({ invoice, entity, entities, onClose, onSaved }
     setForm(current => ({
       ...current,
       invoice_entity_id: nextEntity.id,
-      billing_entity: nextEntity.billing_entity || 'FCS',
-      sac: nextEntity.sac || '998512',
+      billing_entity: nextEntity.billing_entity || defaultBillingEntity,
+      sac: nextEntity.sac || companyConfig.billing.defaultSac,
       gst_component: detectInvoiceGstComponent(nextEntity),
-      igst_rate: nextEntity.igst_rate ?? 18,
-      cgst_rate: nextEntity.cgst_rate ?? 9,
-      sgst_rate: nextEntity.sgst_rate ?? 9
+      igst_rate: nextEntity.igst_rate ?? companyConfig.billing.gstPercentage,
+      cgst_rate: nextEntity.cgst_rate ?? companyConfig.billing.gstPercentage / 2,
+      sgst_rate: nextEntity.sgst_rate ?? companyConfig.billing.gstPercentage / 2
     }))
   }
   const generatePreview = async () => {

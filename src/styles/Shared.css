@@ -1,4 +1,4 @@
-/* ===================== SHARED STYLES — Fyndbridge ATS ===================== */
+/* ===================== SHARED STYLES — Recruitment ATS ===================== */
 
 /* ===== Buttons ===== */
 .btn-primary {
@@ -2632,3 +2632,4 @@ button.document-attachment-main:not(:disabled) {
     grid-template-columns: 1fr;
   }
 }
+

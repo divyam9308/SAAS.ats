@@ -167,3 +167,4 @@ test('overall attendance returns a complete zero summary when there are no consu
     lossOfPayExposure: 0
   })
 })
+

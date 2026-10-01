@@ -32,12 +32,13 @@ function publicExperienceLabel(value) {
 function buildPublicRoleShareHtml(role, frontendOrigin) {
   const origin = safeFrontendOrigin(frontendOrigin)
   const slug = encodeURIComponent(clean(role?.slug))
-  const roleUrl = `${origin}/open-roles/${slug}`
+  const publicPath = companyConfig.publicCareers.path.replace(/\/$/, '')
+  const roleUrl = `${origin}${publicPath}/${slug}`
   const shareUrl = `${origin}/share/open-roles/${slug}`
   const roleName = clean(role?.public_name) || 'Open Role'
   const location = clean(role?.public_location) || 'Location not specified'
   const experience = publicExperienceLabel(role?.public_experience)
-  const title = `${roleName} | FyndBridge Open Roles`
+  const title = `${roleName} | ${companyConfig.company.displayName} ${companyConfig.publicCareers.headerText}`
   const description = `Location: ${location} · Experience: ${experience}`
 
   return `<!doctype html>
@@ -50,7 +51,7 @@ function buildPublicRoleShareHtml(role, frontendOrigin) {
     <meta name="robots" content="noindex,follow" />
     <link rel="canonical" href="${escapeHtml(roleUrl)}" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="FyndBridge Open Roles" />
+    <meta property="og:site_name" content="${escapeHtml(companyConfig.company.displayName)} ${escapeHtml(companyConfig.publicCareers.headerText)}" />
     <meta property="og:title" content="${escapeHtml(roleName)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(shareUrl)}" />
@@ -59,10 +60,12 @@ function buildPublicRoleShareHtml(role, frontendOrigin) {
     <meta http-equiv="refresh" content="0;url=${escapeHtml(roleUrl)}" />
   </head>
   <body>
-    <p>Opening <a href="${escapeHtml(roleUrl)}">${escapeHtml(roleName)}</a> at FyndBridge…</p>
+    <p>Opening <a href="${escapeHtml(roleUrl)}">${escapeHtml(roleName)}</a> at ${escapeHtml(companyConfig.company.displayName)}…</p>
     <script>window.location.replace(${JSON.stringify(roleUrl).replace(/</g, '\\u003c')})</script>
   </body>
 </html>`
 }
 
 module.exports = { buildPublicRoleShareHtml, publicExperienceLabel, safeFrontendOrigin }
+const { companyConfig } = require('../config/companyConfig')
+

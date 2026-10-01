@@ -2,6 +2,7 @@ const crypto = require('crypto')
 const fs = require('fs/promises')
 const path = require('path')
 const { v4: uuidv4 } = require('uuid')
+const { companyConfig } = require('../config/companyConfig')
 const { normalizeMandateStatus } = require('./mandateStatuses')
 const { STORAGE_BUCKETS, normalizeStoragePath } = require('./storageBuckets')
 
@@ -17,6 +18,24 @@ const PUBLIC_JOB_FIELDS = Object.freeze([
   'public_jd'
 ])
 const ACTIVE_APPLICATION_STATUSES = Object.freeze(['pending', 'converting'])
+const CANDIDATE_FIELDS = companyConfig.candidate?.fields || {}
+const PUBLIC_FIELD_KEYS = Object.freeze({
+  full_name: 'fullName',
+  email: 'email',
+  mobile_number: 'phone',
+  current_designation: 'designation',
+  current_organisation: 'currentCompany',
+  experience_years: 'experience',
+  location: 'location',
+  skills: 'skills',
+  notice_period: 'noticePeriod',
+  current_salary: 'salary',
+  linkedin_url: 'linkedin',
+  comments: 'notes',
+  open_to_relocate: 'relocation'
+})
+const fieldMode = field => CANDIDATE_FIELDS[PUBLIC_FIELD_KEYS[field]] || 'optional'
+const fieldRequired = field => fieldMode(field) === 'required'
 
 function clean(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -37,7 +56,7 @@ function parseStringArray(value) {
 
 function indiaDate(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: companyConfig.company.timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
@@ -229,37 +248,38 @@ function safeInteger(value) {
 
 function validatePublicApplication(body) {
   const errors = {}
-  const requiredText = [
+  const textFields = [
     'full_name', 'email', 'mobile_number', 'current_designation', 'current_organisation',
     'location', 'open_to_relocate'
   ]
-  for (const field of requiredText) if (!clean(body[field])) errors[field] = `${field} is required`
+  for (const field of textFields) if (fieldRequired(field) && !clean(body[field])) errors[field] = `${field} is required`
   const email = normalizeEmail(body.email)
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address'
   const mobile = normalizeMobile(body.mobile_number)
   if (mobile && !/^\+?\d{7,15}$/.test(mobile)) errors.mobile_number = 'Enter a valid mobile number'
   const experience = Number(body.experience_years)
-  if (!clean(body.experience_years) || !Number.isFinite(experience) || experience < 0) errors.experience_years = 'Experience must be zero or greater'
+  if ((fieldRequired('experience_years') && !clean(body.experience_years)) || (clean(body.experience_years) && (!Number.isFinite(experience) || experience < 0))) errors.experience_years = 'Experience must be zero or greater'
   const notice = safeInteger(body.notice_period)
-  if (!clean(body.notice_period) || !Number.isInteger(notice) || notice < 0) errors.notice_period = 'Notice period must be a whole number'
+  if ((fieldRequired('notice_period') && !clean(body.notice_period)) || (clean(body.notice_period) && (!Number.isInteger(notice) || notice < 0))) errors.notice_period = 'Notice period must be a whole number'
   const currentSalary = safeInteger(body.current_salary)
-  if (!Number.isInteger(currentSalary) || currentSalary <= 0 || currentSalary > 999999999) {
+  if ((fieldRequired('current_salary') && !clean(body.current_salary)) || (clean(body.current_salary) && (!Number.isInteger(currentSalary) || currentSalary <= 0 || currentSalary > 999999999))) {
     errors.current_salary = 'CTC must be a positive whole LPA value with at most 9 digits'
   }
   const skills = parseStringArray(body.skills)
-  if (!skills.length) errors.skills = 'At least one skill is required'
+  if (fieldRequired('skills') && !skills.length) errors.skills = 'At least one skill is required'
   if (clean(body.linkedin_url)) {
     try {
       const url = new URL(clean(body.linkedin_url))
       if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid')
     } catch { errors.linkedin_url = 'Enter a valid LinkedIn URL' }
   }
-  if (!['true', 'false', 'NA'].includes(clean(body.open_to_relocate))) errors.open_to_relocate = 'Select whether the candidate is open to relocate'
+  if (clean(body.open_to_relocate) && !['true', 'false', 'NA'].includes(clean(body.open_to_relocate))) errors.open_to_relocate = 'Select whether the candidate is open to relocate'
   if (!clean(body.role_slug)) errors.role_slug = 'Role is required'
   return errors
 }
 
 function publicApplicationPayload(body) {
+  const optionalNumber = value => clean(value) ? Number(value) : null
   return {
     full_name: clean(body.full_name),
     email: normalizeEmail(body.email),
@@ -268,11 +288,11 @@ function publicApplicationPayload(body) {
     mobile_normalized: normalizedMobileIdentity(body.mobile_number),
     current_designation: clean(body.current_designation),
     current_organisation: clean(body.current_organisation),
-    experience_years: Number(body.experience_years),
+    experience_years: optionalNumber(body.experience_years),
     location: clean(body.location),
     skills: parseStringArray(body.skills),
-    notice_period: Number(body.notice_period),
-    current_salary: Number(body.current_salary),
+    notice_period: optionalNumber(body.notice_period),
+    current_salary: optionalNumber(body.current_salary),
     linkedin_url: clean(body.linkedin_url) || null,
     comments: cleanMultiline(body.comments) || null,
     open_to_relocate: clean(body.open_to_relocate)

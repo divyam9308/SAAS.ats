@@ -122,3 +122,4 @@ test('AI current organisation takes priority over the heuristic fallback', async
 
   assert.equal(parsed.ai_extracted.currentOrganisation, 'Current Employer Ltd')
 })
+

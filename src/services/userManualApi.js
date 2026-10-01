@@ -32,3 +32,4 @@ export async function fetchUserManualPreviewUrl(path) {
   if (!payload.url) throw new Error('User manual preview is unavailable.')
   return `${payload.url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`
 }
+

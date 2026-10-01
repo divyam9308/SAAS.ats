@@ -55,3 +55,4 @@ export function getConsultantReportRows(kind, filters, { signal } = {}) {
 
   return request(`${endpoint}?${params.toString()}`, { signal })
 }
+

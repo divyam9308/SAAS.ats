@@ -13,7 +13,7 @@ import TablePopover from '../components/TablePopover'
 import FloatingDropdown from '../components/FloatingDropdown'
 import CompactPagination from '../components/CompactPagination'
 import FormattedDateInput from '../components/FormattedDateInput'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import { AttachmentList, DocumentIconGroup } from '../components/DocumentAttachments'
 import { apiFetch, normalizeExternalUrl, openExternalUrl, openProtectedDocumentPath } from '../services/apiClient'
 import '../styles/Shared.css'
@@ -1405,7 +1405,7 @@ export default function JobsPage() {
               <tbody>
                 <tr className="table-loading-row">
                   <td className="table-loading-cell" colSpan={Math.max(activeColumns.length, 1)}>
-                    <FyndbridgeLoader size={88} label="Loading mandates..." className="table-inline-loader" />
+                    <AtsLoader size={88} label="Loading mandates..." className="table-inline-loader" />
                   </td>
                 </tr>
               </tbody>
@@ -1899,3 +1899,4 @@ export default function JobsPage() {
     </div>
   )
 }
+

@@ -1,4 +1,6 @@
-export const MANDATE_STATUSES = ['Ongoing (P1)', 'Delivered (P2)', 'Paused (P3)', 'Completed', 'Scrapped']
+import { companyConfig } from '../config/companyConfig'
+
+export const MANDATE_STATUSES = [...companyConfig.jobs.statuses]
 
 export const MANDATE_STATUS_OPTIONS = ['', ...MANDATE_STATUSES]
 

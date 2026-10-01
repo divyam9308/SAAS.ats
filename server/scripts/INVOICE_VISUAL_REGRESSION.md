@@ -65,3 +65,4 @@ diagnostic, not the hard pass condition. A nonzero diff is expected.
 RGB changes of 12 or less per channel are treated as antialiasing noise. The
 report records the advisory 0.1% threshold, strict zero-tolerance changed-pixel
 count, mean delta, and RMS delta so the visual evidence remains explicit.
+

@@ -87,3 +87,4 @@ test('RA can be partial and rows outside the five categories are ignored', () =>
   assert.equal(result.ss_ns, null)
   assert.deepEqual(result.ra, { state: 'partial', filled: 2, total: 5 })
 })
+

@@ -34,3 +34,4 @@ const generatedAt = existing.version === version && existing.generatedAt ? exist
 
 mkdirSync(dirname(outputPath), { recursive: true })
 writeFileSync(outputPath, `${JSON.stringify({ version, generatedAt }, null, 2)}\n`)
+

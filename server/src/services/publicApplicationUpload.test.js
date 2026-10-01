@@ -145,3 +145,4 @@ test('resume validation errors stay public-safe through the terminal public rout
   assert.equal(response.statusCode, 400)
   assert.deepEqual(response.body, { error: 'Resume PDF is required.' })
 })
+

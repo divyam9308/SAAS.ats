@@ -525,7 +525,7 @@
   background: #fff;
   box-shadow: 0 2px 10px rgba(var(--brand-blue-rgb), .04);
 }
-.report-load-state .fyndbridge-loader-wrap { min-height: clamp(360px, calc(100dvh - 330px), 560px); }
+.report-load-state .ats-loader-wrap { min-height: clamp(360px, calc(100dvh - 330px), 560px); }
 .report-error-panel {
   display: flex;
   align-items: center;
@@ -652,7 +652,7 @@
 .report-search-control svg { position: absolute; left: 12px; bottom: 12px; color: #778194; }
 .report-search-control input { padding-left: 36px; }
 .report-modal-body { min-height: 230px; padding: 14px 20px; overflow: auto; }
-.report-modal-body .fyndbridge-loader-wrap { min-height: 230px; }
+.report-modal-body .ats-loader-wrap { min-height: 230px; }
 .report-empty-state { display: grid; min-height: 210px; place-items: center; color: #778194; }
 .report-error-state { align-content: center; gap: 12px; text-align: center; }
 .report-modal-footer {
@@ -923,3 +923,4 @@
   .report-modal-footer .compact-pagination { order: 3; width: 100%; justify-content: center; }
   .report-tab-stage { min-height: 2580px; }
 }
+

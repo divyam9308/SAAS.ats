@@ -1,11 +1,13 @@
+const { companyConfig } = require('../config/companyConfig')
+
 const STORAGE_BUCKETS = {
-  CV: 'resumes',
-  JD: 'jds',
-  CONTRACT: 'contract-pdfs',
-  INVOICE: 'invoice',
-  EMPLOYEE_HANDBOOK: 'employee-handbook',
-  USER_MANUAL: 'user-manual',
-  PUBLIC_APPLICATIONS: 'public-applications'
+  CV: companyConfig.documents.cvBucket,
+  JD: companyConfig.documents.jdBucket,
+  CONTRACT: companyConfig.documents.contractBucket,
+  INVOICE: companyConfig.documents.invoiceBucket,
+  EMPLOYEE_HANDBOOK: companyConfig.documents.employeeHandbookBucket,
+  USER_MANUAL: companyConfig.documents.userManualBucket,
+  PUBLIC_APPLICATIONS: companyConfig.documents.publicApplicationsBucket
 }
 
 const STORAGE_BUCKET_TYPES = {

@@ -6,8 +6,8 @@ const path = require('node:path')
 const root = path.resolve(__dirname, '../../..')
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-const loaderComponent = read('src/components/FyndbridgeLoader.jsx')
-const loaderCss = read('src/components/FyndbridgeLoader.css')
+const loaderComponent = read('src/components/AtsLoader.jsx')
+const loaderCss = read('src/components/AtsLoader.css')
 const candidatesPage = read('src/pages/CandidatesPage.jsx')
 const jobsPage = read('src/pages/JobsPage.jsx')
 const sidebar = read('src/components/Sidebar.jsx')
@@ -16,15 +16,15 @@ const invoiceCss = read('src/pages/InvoicePage.css')
 
 test('Fyndbridge loader resets invisibly without a persistent outline or backward stroke', () => {
   assert.doesNotMatch(loaderComponent, /<animate\b/)
-  assert.doesNotMatch(loaderComponent, /fyndbridge-loader-track/)
-  assert.match(loaderComponent, /className="fyndbridge-loader-progress"/)
-  assert.doesNotMatch(loaderCss, /fyndbridge-loader-track/)
-  assert.match(loaderCss, /\.fyndbridge-loader-progress path\s*\{[\s\S]*opacity:\s*0;[\s\S]*stroke-dasharray:\s*1;[\s\S]*stroke-dashoffset:\s*1;[\s\S]*animation:\s*fyndbridge-loader-draw/)
-  assert.match(loaderCss, /@keyframes fyndbridge-loader-draw/)
+  assert.doesNotMatch(loaderComponent, /ats-loader-track/)
+  assert.match(loaderComponent, /className="ats-loader-progress"/)
+  assert.doesNotMatch(loaderCss, /ats-loader-track/)
+  assert.match(loaderCss, /\.ats-loader-progress path\s*\{[\s\S]*opacity:\s*0;[\s\S]*stroke-dasharray:\s*1;[\s\S]*stroke-dashoffset:\s*1;[\s\S]*animation:\s*ats-loader-draw/)
+  assert.match(loaderCss, /@keyframes ats-loader-draw/)
   assert.match(loaderCss, /0%,[\s\S]*4%\s*\{[\s\S]*opacity:\s*0;[\s\S]*stroke-dashoffset:\s*1/)
   assert.match(loaderCss, /94%,[\s\S]*100%\s*\{[\s\S]*opacity:\s*0/)
   assert.doesNotMatch(loaderCss, /stroke-dashoffset:\s*-/)
-  assert.match(loaderCss, /prefers-reduced-motion[\s\S]*fyndbridge-loader-progress path[\s\S]*animation:\s*none;[\s\S]*opacity:\s*1;[\s\S]*stroke-dashoffset:\s*0/)
+  assert.match(loaderCss, /prefers-reduced-motion[\s\S]*ats-loader-progress path[\s\S]*animation:\s*none;[\s\S]*opacity:\s*1;[\s\S]*stroke-dashoffset:\s*0/)
 })
 
 test('candidate initial loading and mandate background refresh ownership remain stable', () => {
@@ -50,3 +50,4 @@ test('invoice detail table uses one shared column model with centered non-overla
   assert.match(invoiceCss, /\.invoice-detail-table td[\s\S]*vertical-align:\s*middle[\s\S]*overflow-wrap:\s*anywhere/)
   assert.match(invoiceCss, /\.invoice-wrap-cell\s*\{[\s\S]*overflow-wrap:\s*anywhere/)
 })
+

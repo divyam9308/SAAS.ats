@@ -321,3 +321,4 @@ module.exports = {
   TESSERACT_LANGUAGE_PATH,
   TESSERACT_WORKER_PATH
 }
+

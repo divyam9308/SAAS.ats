@@ -35,3 +35,4 @@ from canonical
 where lower(regexp_replace(trim(coalesce(c.client_name, c.name, '')), '\s+', ' ', 'g')) = canonical.normalized_name;
 
 create index if not exists clients_client_display_id_idx on public.clients(client_display_id);
+

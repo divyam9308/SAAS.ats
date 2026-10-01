@@ -357,3 +357,4 @@ $$;
 
 revoke all on function public.reassign_employee_assignments(uuid, text, text, text, text[]) from public, anon, authenticated;
 grant execute on function public.reassign_employee_assignments(uuid, text, text, text, text[]) to service_role;
+

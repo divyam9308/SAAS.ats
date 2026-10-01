@@ -9,3 +9,4 @@ values ('dashboard_restrict_non_admin_to_self', 'true'::jsonb)
 on conflict (key) do nothing;
 
 alter table public.app_settings enable row level security;
+

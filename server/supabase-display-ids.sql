@@ -158,3 +158,4 @@ create index if not exists clients_client_display_id_idx
 
 create unique index if not exists candidates_candidate_display_id_key
   on public.candidates(candidate_display_id);
+

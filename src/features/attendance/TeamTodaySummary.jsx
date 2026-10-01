@@ -66,3 +66,4 @@ export default function TeamTodaySummary({ summary, loading, error }) {
     </Modal>}
   </section>
 }
+

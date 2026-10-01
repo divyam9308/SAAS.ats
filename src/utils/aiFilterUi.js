@@ -51,3 +51,4 @@ export const highlightText = (value, filters) => {
     ? React.createElement('mark', { className: 'ai-filter-highlight', key: `${part}-${index}` }, part)
     : part)
 }
+

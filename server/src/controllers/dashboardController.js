@@ -5,6 +5,7 @@ const { scopeDashboardCandidateAssociations } = require('../services/dashboardCa
 const { fetchEveryPage } = require('../services/supabasePagination')
 const { currentDashboardFinancialYear, dashboardPeriodRange } = require('../utils/dashboardPeriod')
 const { MANDATE_STATUSES, normalizeMandateStatus } = require('../services/mandateStatuses')
+const { billingEntities, companyConfig } = require('../config/companyConfig')
 
 const CLIENT_STATUSES = ['-', 'Active', 'Inactive', 'Converted', 'Not Converted', 'Follow Up Required', 'Not Hiring', 'Not Adding Consultants', "Didn't Pick Up"]
 const EMPTY_DASHBOARD = {
@@ -13,11 +14,11 @@ const EMPTY_DASHBOARD = {
   clientStatusData: CLIENT_STATUSES.map((name) => ({ name, value: 0 })),
   candidateStatusData: CANDIDATE_STATUSES.map((name) => ({ name, value: 0 })),
   mandateStatusData: MANDATE_STATUSES.map((name) => ({ name, value: 0 })),
-  billingEntityData: [{ label: 'FCS Billing Entity', value: 0 }, { label: 'FCAPL Billing Entity', value: 0 }],
+  billingEntityData: billingEntities().map(entity => ({ label: `${entity.key} Billing Entity`, value: 0 })),
   clientTrend: [],
   candidateTrend: [],
   mandateTrend: [],
-  candidateFunnel: ['Interested', 'In Discussion', 'Client Submission', 'Interview', 'Offered', 'Hired'].map((name) => ({ name, value: 0 })),
+  candidateFunnel: companyConfig.pipeline.filter(stage => stage.enabled && stage.key !== 'duplicate').slice(0, 6).map(stage => ({ name: stage.label, value: 0 })),
   consultantPerformance: [],
   recentActivity: [],
   sectionErrors: {}
@@ -284,16 +285,10 @@ async function getDashboardStats(req, res) {
 
     const activeClients = uniqueClients.filter((client) => normalizeClientStatus(client.status) === 'Active')
     const hiredAssociations = filteredAssociations.filter((row) => row.canonicalStatus === 'Hired')
-    const billingEntityData = [
-      {
-        label: 'FCS Billing Entity',
-        value: activeClients.filter((client) => (client.contract_signed === true || same(client.contract_signed, 'Yes')) && same(client.billing_entity, 'FCS')).length
-      },
-      {
-        label: 'FCAPL Billing Entity',
-        value: activeClients.filter((client) => (client.contract_signed === true || same(client.contract_signed, 'Yes')) && same(client.billing_entity, 'FCAPL')).length
-      }
-    ]
+    const billingEntityData = billingEntities().map(entity => ({
+      label: `${entity.key} Billing Entity`,
+      value: activeClients.filter((client) => (client.contract_signed === true || same(client.contract_signed, 'Yes')) && same(client.billing_entity, entity.key)).length
+    }))
 
     const clientTrend = statusTrend(uniqueClients, CLIENT_STATUSES, (row) => normalizeClientStatus(row.status), (row) => row.connected_on_date || row.created_at, period, range)
     const candidateTrend = statusTrend(filteredAssociations, CANDIDATE_STATUSES, (row) => row.dashboardStatus, (row) => row.created_at, period, range)

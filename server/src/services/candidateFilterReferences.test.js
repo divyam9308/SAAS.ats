@@ -152,3 +152,4 @@ test('arbitrary non-UUID values cannot reach UUID-backed client/job columns', as
     error => error.statusCode === 400 && /Invalid client/.test(error.message)
   )
 })
+

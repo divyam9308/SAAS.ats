@@ -4,3 +4,4 @@
 insert into public.app_settings (key, value)
 values ('overall_consultant_report_audience', '"admins"'::jsonb)
 on conflict (key) do nothing;
+

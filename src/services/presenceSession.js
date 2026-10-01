@@ -29,3 +29,4 @@ export async function clearPresenceBeforeLogout(userId = '') {
     announcePresenceLogout(userId)
   }
 }
+

@@ -742,3 +742,4 @@ test('overall facts sum each consultant report and weight conversions by tracked
   assert.deepEqual(result.recentMandates, [])
   assert.deepEqual(result.recentConversions, [])
 })
+

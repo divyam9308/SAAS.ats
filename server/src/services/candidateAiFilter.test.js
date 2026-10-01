@@ -225,3 +225,4 @@ for (const query of invalidQueries) {
     assert.equal(parseCandidatePrompt(query, { now: FIXED_NOW }), null)
   })
 }
+

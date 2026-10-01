@@ -19,3 +19,4 @@ export default function RecordLockButton({ tableName, recordId, locked, onChange
     </button>
   )
 }
+

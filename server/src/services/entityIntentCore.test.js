@@ -313,3 +313,4 @@ test('unsafe, empty and malformed prompts are rejected before any AI request', a
     assert.equal(calls, 0)
   }
 })
+

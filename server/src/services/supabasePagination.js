@@ -13,3 +13,4 @@ async function fetchEveryPage(queryFactory, { pageSize = DEFAULT_PAGE_SIZE } = {
 }
 
 module.exports = { DEFAULT_PAGE_SIZE, fetchEveryPage }
+

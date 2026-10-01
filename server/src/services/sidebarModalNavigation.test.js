@@ -26,3 +26,4 @@ test('report modal only makes the main content inert, not the sidebar', () => {
   assert.doesNotMatch(reportComponents, /document\.getElementById\('root'\)/)
   assert.match(reportComponents, /appContent\?\.setAttribute\('inert', ''\)/)
 })
+

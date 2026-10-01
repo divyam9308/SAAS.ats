@@ -86,3 +86,4 @@ for (const [label, response] of [
     assert.equal(result.filters.search_text, 'strategic partnership maturity')
   })
 }
+

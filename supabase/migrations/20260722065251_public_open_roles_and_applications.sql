@@ -720,3 +720,4 @@ commit;
 --    conversion provenance.
 -- 5. Dropping public.public_applications or deleting the private bucket is
 --    destructive and permanently deletes applicant records/CVs.
+

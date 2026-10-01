@@ -44,3 +44,4 @@ export const dashboardFilterEntries = (filters) => [
   ['Role', filters?.role],
   ['Period', dashboardPeriodDisplay(filters?.period)]
 ].filter(([, value]) => value)
+

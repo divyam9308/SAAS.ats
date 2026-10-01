@@ -28,3 +28,4 @@ export const getTeamAttendanceSummary=(year,month,financialYear)=>request(`/team
 export const getLeaveBalances=financialYear=>request(`/leave-balances?financial_year=${encodeURIComponent(financialYear)}`)
 export const adjustLeaveBalance=(userId,amount,description,financialYear)=>request(`/leave-balances/${userId}/adjust`,body({amount,description,financial_year:financialYear}))
 export function invalidateAttendance(){invalidateApiJsonCache('/attendance')}
+

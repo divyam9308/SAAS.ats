@@ -14,3 +14,4 @@ test('leave submission allows Sunday inside a range with non-Sunday boundaries',
   assert.equal(leaveRangeHasSundayBoundary('2026-10-10','2026-10-12'),false)
   assert.equal(leaveRangeHasSundayBoundary('2026-10-12','2026-10-12'),false)
 })
+

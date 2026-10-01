@@ -21,3 +21,4 @@ async function requireSuperAdmin(req, res, next) {
 }
 
 module.exports = { requireAdmin, requireSuperAdmin }
+

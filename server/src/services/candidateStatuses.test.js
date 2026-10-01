@@ -71,3 +71,4 @@ test('dashboard, dash drilldown and import normalization use shared candidate st
   assert.doesNotMatch(importScript, /'in discussion': 'Interested'/)
   assert.doesNotMatch(importScript, /status \|\| 'Interested'/)
 })
+

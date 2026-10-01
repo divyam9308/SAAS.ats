@@ -8,3 +8,4 @@ alter table public.clients
 update public.clients
 set contract_signed = false
 where contract_signed is null;
+

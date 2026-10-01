@@ -246,3 +246,4 @@ test('Public JD correction keeps the column but removes it from listing complete
 test('migration has balanced dollar-quoted function blocks', () => {
   assert.equal((migration.match(/\$\$/g) || []).length % 2, 0)
 })
+

@@ -118,3 +118,4 @@ create policy holidays_active_read on public.company_holidays for select to auth
 
 grant select on public.attendance_permissions, public.attendance_records, public.attendance_correction_requests, public.leave_requests, public.leave_ledger, public.company_holidays to authenticated;
 revoke insert,update,delete on public.attendance_permissions, public.attendance_records, public.attendance_correction_requests, public.leave_requests, public.leave_ledger, public.company_holidays from anon,authenticated;
+

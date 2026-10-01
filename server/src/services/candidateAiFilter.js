@@ -672,3 +672,4 @@ module.exports = {
   candidatePromptIssue, parseCandidatePrompt, validateCandidateFilter,
   flattenConditions, nodeDomain, compileCandidateAst, evaluateCandidateAst
 }
+

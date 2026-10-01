@@ -22,3 +22,4 @@ alter policy invoices_admin_all on public.invoices
 alter policy invoice_pdf_versions_admin_all on public.invoice_pdf_versions
   using (exists (select 1 from public.admin_users where user_id = (select auth.uid()) or lower(email) = lower((select auth.jwt()) ->> 'email')))
   with check (exists (select 1 from public.admin_users where user_id = (select auth.uid()) or lower(email) = lower((select auth.jwt()) ->> 'email')));
+

@@ -45,3 +45,4 @@ test('zero filtered results show both a red alert and a full-width message insid
     assert.match(source, /className="form-error"[\s\S]*role="alert"/)
   }
 })
+

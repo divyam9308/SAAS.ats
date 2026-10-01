@@ -1,0 +1,71 @@
+.ats-loader-wrap {
+  width: 100%;
+  min-height: clamp(280px, calc(100dvh - 360px), 440px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.candidates-table-card > .ats-loader-wrap {
+  height: 100%;
+  min-height: 0;
+}
+
+.ats-loader {
+  width: var(--ats-loader-size);
+  height: auto;
+  flex-shrink: 0;
+}
+
+.ats-loader-progress path {
+  opacity: 0;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ats-loader-draw 2.4s linear infinite;
+}
+
+@keyframes ats-loader-draw {
+  0%,
+  4% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  8%,
+  68%,
+  82% {
+    opacity: 1;
+  }
+  8% {
+    stroke-dashoffset: 1;
+  }
+  68%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .ats-loader { width: min(var(--ats-loader-size), 70px); }
+}
+
+@media (max-width: 720px) {
+  .ats-loader-wrap { min-height: clamp(240px, calc(100dvh - 300px), 360px); }
+  .candidates-table-card > .ats-loader-wrap { min-height: 0; }
+  .ats-loader { width: min(var(--ats-loader-size), 60px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ats-loader-progress path { animation: none; opacity: 1; stroke-dashoffset: 0; }
+}
+

@@ -47,3 +47,4 @@ test('changing a Hired candidate later does not introduce reverse mandate-status
   assert.ok(source.indexOf('if (count <= 0) return') < source.indexOf(".update({ mandate_status: nextStatus"))
   assert.doesNotMatch(candidateController, /status\s*!==\s*'Hired'[\s\S]{0,300}mandate_status/)
 })
+

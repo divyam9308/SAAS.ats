@@ -41,3 +41,4 @@ async function remove(req, res) {
 }
 
 module.exports = { list, preview, remove }
+

@@ -33,3 +33,4 @@ with check (
   and name ~ '^contracts/[^/]+/'
   and lower(right(name, 4)) = '.pdf'
 );
+

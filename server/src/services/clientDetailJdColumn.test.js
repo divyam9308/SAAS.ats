@@ -34,3 +34,4 @@ test('Client Details uses the existing protected JD interaction and refreshes on
   assert.match(clientDetailPage, /openProtectedDocumentPath\('jd', path,\s*\{[\s\S]*?recordId: jobId/)
   assert.match(clientDetailPage, /tables: \['clients', 'client_follow_ups', 'jobs'\]/)
 })
+

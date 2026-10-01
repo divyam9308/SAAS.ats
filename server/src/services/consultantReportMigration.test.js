@@ -71,3 +71,4 @@ test('Overall Consultants audience migration idempotently seeds admins without c
   assert.doesNotMatch(overallAudienceMigration, /\b(?:grant|revoke)\b/i)
   assert.doesNotMatch(overallAudienceMigration, /\b(?:create|alter|drop)\s+policy\b/i)
 })
+

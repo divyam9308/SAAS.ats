@@ -85,3 +85,4 @@ export function useStaffDirectory({ enabled = true } = {}) {
   const selectableStaff = useMemo(() => mergedStaff.filter((employee) => employee.status === 'active'), [mergedStaff])
   return { staff: mergedStaff, selectableStaff, loading, refresh }
 }
+

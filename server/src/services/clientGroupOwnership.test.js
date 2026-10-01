@@ -144,3 +144,4 @@ test('duplicate mandate protection runs before the root move and follow-ups rema
   assert.match(clientsPage, /const followUpClientKey = \(client\) => client\?\.id \|\| ''/)
   assert.match(clientsPage, /const contactOnlyMode = addingContactPerson \|\| editingSecondaryContact/)
 })
+

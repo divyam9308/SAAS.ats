@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import './AppErrorBoundary.css'
+import { companyConfig } from '../config/companyConfig'
 
 const RECOVERY_STORAGE_KEY = 'fb:automatic-app-recovery-at'
 const RECOVERY_COOLDOWN_MS = 30 * 1000
@@ -53,8 +54,8 @@ export default class AppErrorBoundary extends Component {
     return (
       <main className="app-recovery" role="alert">
         <section className="app-recovery-card">
-          <div className="app-recovery-mark">FB</div>
-          <p className="app-recovery-eyebrow">Fyndbridge ATS</p>
+          <div className="app-recovery-mark">{companyConfig.company.shortName.slice(0, 2).toUpperCase()}</div>
+          <p className="app-recovery-eyebrow">{companyConfig.company.atsProductName}</p>
           <h1>{this.state.recovering ? 'Refreshing the ATS…' : 'The page could not be displayed'}</h1>
           <p>{this.state.recovering ? 'A newer application version was detected. This page will reopen automatically.' : 'Your data is safe. Reload the application or return to the dashboard.'}</p>
           {!this.state.recovering && <div className="app-recovery-actions"><button type="button" onClick={this.reload}>Reload ATS</button><button type="button" className="is-secondary" onClick={this.openDashboard}>Open Dashboard</button></div>}

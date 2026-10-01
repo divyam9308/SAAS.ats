@@ -65,3 +65,4 @@ test('backend-only filter projections are security-invoker, service-role-only an
   assert.doesNotMatch(migration, /item\.email\b/)
   assert.match(migration, /to_jsonb\(item\) ->> 'email'/)
 })
+

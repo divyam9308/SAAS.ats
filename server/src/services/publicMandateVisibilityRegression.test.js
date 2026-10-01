@@ -75,3 +75,4 @@ test('status controls merge the server result and refresh the public-role count'
     assert.match(page, /window\.dispatchEvent\(new Event\('ats:public-roles-updated'\)\)/)
   }
 })
+

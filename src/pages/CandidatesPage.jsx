@@ -14,7 +14,7 @@ import TablePopover from '../components/TablePopover'
 import { AttachmentList, DocumentIconGroup } from '../components/DocumentAttachments'
 import CompactPagination from '../components/CompactPagination'
 import FormattedDateInput from '../components/FormattedDateInput'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import '../styles/Shared.css'
 import { candidateCvAttachments, cleanCandidateCvPath, logCandidateCvOpen, normalizeExternalUrl, openExternalUrl, openProtectedDocumentPath, resolveCandidateCvHref } from '../utils/candidateUtils'
 import { CANDIDATE_TABLE_COLUMNS, DEFAULT_CANDIDATE_COLUMN_KEYS, mergeCandidateColumnPreference } from '../utils/candidateTableColumns'
@@ -2363,7 +2363,7 @@ export default function CandidatesPage() {
               <tbody>
                 <tr className="table-loading-row">
                   <td className="table-loading-cell" colSpan={Math.max(activeColumns.length, 1)}>
-                    <FyndbridgeLoader size={88} label="Loading candidates..." className="table-inline-loader" />
+                    <AtsLoader size={88} label="Loading candidates..." className="table-inline-loader" />
                   </td>
                 </tr>
               </tbody>
@@ -2761,3 +2761,4 @@ export default function CandidatesPage() {
     </div>
   )
 }
+

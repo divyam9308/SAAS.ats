@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, FileClock, ReceiptText, X } from 'lucide-react'
-import { FyndbridgeLoader } from '../components/FyndbridgeLoader'
+import { AtsLoader } from '../components/AtsLoader'
 import { useInvoiceRowControls } from '../hooks/useInvoiceRowControls'
 import { fetchInvoiceEntities, fetchInvoiceEntity } from '../services/invoiceApi'
 import { INVOICE_MODEL_LABELS, INVOICE_TYPE_LABELS } from '../utils/invoiceModels'
@@ -52,12 +52,12 @@ const PROFORMA_TABLE_STYLE = { width: `${PROFORMA_TABLE_WIDTH}px`, minWidth: `${
 function InvoiceDetailLoading() {
   return <div className="invoice-page invoice-entity-details">
     <div className="candidate-page-header"><div><Link className="invoice-back-link" to="/invoice"><ChevronLeft size={16} />Back to Invoice</Link><h2>Entity Details</h2><p>Loading invoice history…</p></div></div>
-    <FyndbridgeLoader size={88} label="Loading invoices..." className="invoice-page-loader" />
+    <AtsLoader size={88} label="Loading invoices..." className="invoice-page-loader" />
   </div>
 }
 
 function InvoiceTableLoading({ label }) {
-  return <div className="invoice-detail-table-loading"><FyndbridgeLoader size={76} label={label} className="invoice-inline-loader" /></div>
+  return <div className="invoice-detail-table-loading"><AtsLoader size={76} label={label} className="invoice-inline-loader" /></div>
 }
 
 export default function InvoiceEntityDetailPage() {
@@ -166,3 +166,4 @@ export default function InvoiceEntityDetailPage() {
     {rowControls.dialogs}
   </div>
 }
+

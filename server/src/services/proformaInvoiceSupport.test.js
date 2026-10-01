@@ -2,7 +2,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const pdfParse = require('pdf-parse')
+const { execFileSync } = require('node:child_process')
 const { calculateInvoice, financialYear, renderInvoicePdf, selectInvoiceLayout } = require('./invoiceService')
 
 const root = path.resolve(__dirname, '../../..')
@@ -17,6 +17,7 @@ const invoicePage = read('src/pages/InvoicePage.jsx')
 const detailPage = read('src/pages/InvoiceEntityDetailPage.jsx')
 const rowControls = read('src/components/InvoiceRowControls.jsx')
 const rowControlHook = read('src/hooks/useInvoiceRowControls.js')
+const pdfText = buffer => execFileSync('pdftotext', ['-layout', '-', '-'], { input: buffer, encoding: 'utf8' })
 
 test('proforma sequences are shared across customer entities within each billing entity', () => {
   assert.match(migration, /set invoice_type = 'tax_invoice'[\s\S]*where invoice_type is null or btrim\(invoice_type\) = ''/)
@@ -38,7 +39,8 @@ test('FCS proformas render PI/FB while the stored billing entity remains FCS', (
   assert.match(migration, /next_available_invoice_number_by_type\([\s\S]*p_invoice_type text/)
   assert.match(controller, /\.rpc\('next_available_invoice_number_by_type'/)
   assert.match(controller, /p_invoice_type: invoiceType/)
-  assert.match(controller, /billingEntity === 'FCS' \? 'PI\/FB' : 'PI\/FCAPL'/)
+  assert.match(controller, /const configured = billingEntityConfig\(billingEntity\)/)
+  assert.match(controller, /configured\?\.proformaPrefix/)
   assert.equal(financialYear('2026-07-17'), '26-27')
   assert.equal(financialYear('2027-04-01'), '27-28')
 })
@@ -70,12 +72,12 @@ test('regeneration moves an invoice to the selected entity, billing series, and 
   assert.match(regenerationSection, /expectedNumber !== parts\.invoiceNumber/)
   assert.match(regenerateSection, /\.rpc\('update_invoice_with_reassigned_sequence'/)
   assert.match(regenerateSection, /p_expected_invoice_number: updated\.invoice_number/)
-  assert.match(controller, /billing_entity: \(entityControlsInvoice \|\| invoiceType === 'proforma_invoice'\) \? entity\.billing_entity \|\| 'FCS'/)
-  assert.match(controller, /sac: entityControlsInvoice \? clean\(entity\.sac\) \|\| '998512'/)
+  assert.match(controller, /billing_entity: \(entityControlsInvoice \|\| invoiceType === 'proforma_invoice'\) \? entity\.billing_entity \|\| DEFAULT_BILLING_ENTITY/)
+  assert.match(controller, /sac: entityControlsInvoice \? clean\(entity\.sac\) \|\| companyConfig\.billing\.defaultSac/)
   assert.match(controller, /createInvoicePdf\(\{ entity: \{ \.\.\.entity, \.\.\.input \}, invoice: updated/)
   assert.match(rowControls, /<h3>Select Entity<\/h3><select className="form-control" value=\{form\.invoice_entity_id\}/)
   assert.match(detailPage, /fetchInvoiceEntities\(\)/)
-  assert.match(rowControls, /billing_entity: nextEntity\.billing_entity \|\| 'FCS'/)
+  assert.match(rowControls, /billing_entity: nextEntity\.billing_entity \|\| defaultBillingEntity/)
   assert.match(rowControls, /fetchReassignedInvoiceNumber\(invoice\.id, form\.invoice_entity_id, form\.invoice_date\)/)
   assert.match(rowControls, /value=\{form\.billing_entity\} readOnly/)
   assert.match(rowControls, /expected_invoice_number: preview\.data\.invoice_number/)
@@ -155,7 +157,7 @@ test('tax and proforma previews offer separate save and save-and-download action
 })
 
 test('tax and proforma number previews refresh whenever the selected legal entity changes', () => {
-  assert.match(invoicePage, /fetchNextInvoiceNumber\(form\.billing_entity \|\| 'FCS', form\.invoice_date \|\| today\(\), invoiceType\)/)
+  assert.match(invoicePage, /fetchNextInvoiceNumber\(form\.billing_entity \|\| DEFAULT_BILLING_ENTITY, form\.invoice_date \|\| today\(\), invoiceType\)/)
   assert.match(invoicePage, /\[form\.billing_entity, form\.invoice_date, invoiceType, selectedId\]/)
   assert.match(invoicePage, /nextNumberLoading \? 'Loading invoice number\.\.\.' : nextNumberFailed \? 'Unable to load invoice number'/)
   assert.doesNotMatch(invoicePage, /nextNumber \|\| 'Auto-generated'/)
@@ -206,8 +208,10 @@ test('FCS and FCAPL proforma PDFs reuse normal invoice layouts with their own PI
       const proformaInvoice = { ...baseInvoice, invoice_type: 'proforma_invoice', invoice_number: proformaNumber }
       const tax = await renderInvoicePdf({ entity, invoice: taxInvoice, overrides: input })
       const proforma = await renderInvoicePdf({ entity, invoice: proformaInvoice, overrides: input })
-      const taxText = (await pdfParse(tax.buffer)).text
-      const proformaText = (await pdfParse(proforma.buffer)).text
+      // pdf-parse shares a PDF.js worker/cache between calls; parsing the two
+      // independent buffers together avoids its sequential XRef race.
+      const taxText = pdfText(tax.buffer)
+      const proformaText = pdfText(proforma.buffer)
       const normalizeDocumentText = (text, title, number) => text
         .replace(title, 'INVOICE TITLE')
         .replace(number, 'INVOICE NUMBER')

@@ -32,3 +32,4 @@ export const ATTENDANCE_LEGEND_STATUSES = [
   'Not Marked',
   'Future'
 ]
+

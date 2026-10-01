@@ -102,3 +102,4 @@ test('API and UI use stored PDF version numbers after deletions', () => {
   assert.match(rowControls, /versionNumber = version\.version_number/)
   assert.doesNotMatch(rowControls, /pdf_versions\.length - index/)
 })
+

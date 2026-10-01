@@ -46,3 +46,4 @@ group by
   client_id,
   lower(regexp_replace(btrim(title), '[[:space:]]+', ' ', 'g'))
 having count(*) > 1;
+

@@ -16,3 +16,4 @@ const supabase = createClient(supabaseUrl, anonKey, {
 
 module.exports = supabase
 
+

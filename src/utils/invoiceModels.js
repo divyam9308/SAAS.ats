@@ -1,3 +1,5 @@
+import { companyConfig } from '../config/companyConfig'
+
 export const INVOICE_MODELS = [
   ['joining_percentage', 'Joining % Model'], ['joining_flat_fee', 'Joining Flat Fee'], ['retainer', 'Retainer'],
   ['jra_adjustment_percentage', 'JRA Adjustment %'], ['jra_adjustment_flat_fee', 'JRA Adjustment Flat Fee'], ['project', 'Project'], ['others', 'Others']
@@ -10,17 +12,19 @@ export const INVOICE_TYPE_LABELS = {
 export const EMPTY_INVOICE = {
   consultant_name: '', candidate_name: '', professional_fee_text: '', model: 'joining_percentage', ctc_lpa: '', model_percent: '',
   model_flat_fee: '', retainer_amount: '', project_amount: '', jra_adjustment_value: '', jra_base_value: '', jra_flat_fee: '',
-  others_amount: '', sac: '998512', billing_entity: 'FCS', gst_component: 'IGST', igst_rate: 18, cgst_rate: 9, sgst_rate: 9
+  others_amount: '', sac: companyConfig.billing.defaultSac, billing_entity: companyConfig.billing.entities[0]?.key || 'PRIMARY', gst_component: 'IGST',
+  igst_rate: companyConfig.billing.gstPercentage, cgst_rate: companyConfig.billing.gstPercentage / 2, sgst_rate: companyConfig.billing.gstPercentage / 2
 }
 export function detectInvoiceGstComponent(location = {}) {
   const match = String(location.state_code ?? '').trim().match(/^0*(\d{1,2})$/)
   if (match) {
     const stateCode = Number(match[1])
     const isValidGstStateCode = (stateCode >= 1 && stateCode <= 38) || stateCode === 97 || stateCode === 99
-    if (isValidGstStateCode) return stateCode === 7 ? 'CGST_SGST' : 'IGST'
+    if (isValidGstStateCode) return stateCode === Number(companyConfig.billing.entities[0]?.stateCode) ? 'CGST_SGST' : 'IGST'
   }
   const text = [location.address, location.state, location.place_of_supply].map(value => String(value ?? '')).join(' ')
-  return /\b(new\s+delhi|delhi|south east delhi|north delhi|south delhi|east delhi|west delhi|central delhi)\b/i.test(text) ? 'CGST_SGST' : 'IGST'
+  const homeState = String(companyConfig.billing.entities[0]?.state || '').trim()
+  return homeState && text.toLowerCase().includes(homeState.toLowerCase()) ? 'CGST_SGST' : 'IGST'
 }
 const decimalString = value => {
   const text = String(value ?? '').replace(/₹|â‚¹|Rs\.?|,/gi, '').trim()

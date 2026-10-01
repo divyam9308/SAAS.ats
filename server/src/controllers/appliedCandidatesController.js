@@ -531,3 +531,4 @@ module.exports = {
   updateAppliedCandidateStatus,
   convertAppliedCandidate
 }
+

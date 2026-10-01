@@ -43,3 +43,4 @@ export default function PageViewPermissions({ isSuperAdmin, permissions, disable
     </section>
   )
 }
+

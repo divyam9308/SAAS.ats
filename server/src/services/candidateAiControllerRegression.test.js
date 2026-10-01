@@ -82,3 +82,4 @@ test('manual live evaluator is opt-in and also uses the v2 one-call contract', (
   assert.match(evaluator, /candidateIntentSchema/)
   assert.match(evaluator, /primaryOnly:\s*true/)
 })
+

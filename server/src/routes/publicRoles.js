@@ -37,3 +37,4 @@ router.post(
 router.use(controller.publicRouteErrorHandler)
 
 module.exports = router
+

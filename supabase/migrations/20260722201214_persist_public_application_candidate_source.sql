@@ -28,3 +28,4 @@ where upper(btrim(coalesce(candidate.candidate_display_id, ''))) = 'CA844'
   );
 
 commit;
+

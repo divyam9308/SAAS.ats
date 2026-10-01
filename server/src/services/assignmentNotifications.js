@@ -144,3 +144,4 @@ async function createClientFollowUpDueNotification({ recipientUserId, consultant
 }
 
 module.exports = { createConsultantAssignmentNotification, createClientFollowUpDueNotification, findProfileUser, sameName, todayLocal }
+

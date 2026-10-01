@@ -8,22 +8,23 @@ import { useAdminAccess } from '../hooks/useAdminAccess'
 import { usePageViewPermissions } from '../hooks/usePageViewPermissions'
 import { preloadRoute } from '../utils/routePreload'
 import { apiFetch } from '../services/apiClient'
+import { companyConfig, moduleEnabled, term } from '../config/companyConfig'
 import './Sidebar.css'
 
 const navItems = [
-  { to: '/dashboard',            label: 'Dashboard', key: 'dashboard', Icon: LayoutDashboard, end: true },
-  { to: '/dashboard/jobs',       label: 'Mandates', key: 'mandates', Icon: Briefcase },
-  { to: '/dashboard/clients',    label: 'Clients', key: 'clients', Icon: Building2 },
-  { to: '/dashboard/candidates', label: 'Candidates', key: 'candidates', Icon: Users },
-  { to: '/dashboard/attendance', label: 'Attendance', key: 'attendance', Icon: CalendarCheck },
-  { to: '/dashboard/reports/consultant', label: 'Report', key: 'report', Icon: ChartNoAxesCombined },
-  { to: '/dashboard/performance', label: 'PMS', key: 'performance_review', Icon: ClipboardList },
-  { to: '/dashboard/user-manual', label: 'User Manual', key: 'user_manual', Icon: BookOpenText },
+  { to: '/dashboard',            label: 'Dashboard', key: 'dashboard', module: 'dashboard', Icon: LayoutDashboard, end: true },
+  { to: '/dashboard/jobs',       label: term('job', true), key: 'mandates', module: 'jobs', Icon: Briefcase },
+  { to: '/dashboard/clients',    label: term('client', true), key: 'clients', module: 'clients', Icon: Building2 },
+  { to: '/dashboard/candidates', label: term('candidate', true), key: 'candidates', module: 'candidates', Icon: Users },
+  { to: '/dashboard/attendance', label: 'Attendance', key: 'attendance', module: 'attendance', Icon: CalendarCheck },
+  { to: '/dashboard/reports/consultant', label: `${term('consultant')} Report`, key: 'report', module: 'reports', Icon: ChartNoAxesCombined },
+  { to: '/dashboard/performance', label: 'Performance', key: 'performance_review', module: 'performance', Icon: ClipboardList },
+  { to: '/dashboard/user-manual', label: 'User Manual', key: 'user_manual', module: 'userManual', Icon: BookOpenText },
 ]
 
 const trailingNavItems = [
-  { to: '/open-roles', label: 'Public Roles', key: 'public_roles', Icon: ExternalLink, external: true },
-  { to: '/dashboard/applied-candidates', label: 'Applied Candidates', key: 'applied_candidates', Icon: UserRoundCheck },
+  { to: companyConfig.publicCareers.path, label: 'Public Roles', key: 'public_roles', module: 'publicRoles', Icon: ExternalLink, external: true },
+  { to: '/dashboard/applied-candidates', label: `Applied ${term('candidate', true)}`, key: 'applied_candidates', module: 'applications', Icon: UserRoundCheck },
 ]
 
 export default function Sidebar() {
@@ -70,10 +71,10 @@ export default function Sidebar() {
   }, [canViewAppliedCandidates, pageViews.loading])
 
   useEffect(() => {
-    preloadRoute('/dashboard/performance')
-    preloadRoute('/dashboard/attendance')
-    preloadRoute('/dashboard/reports/consultant')
-    preloadRoute('/dashboard/user-manual')
+    if (moduleEnabled('performance')) preloadRoute('/dashboard/performance')
+    if (moduleEnabled('attendance')) preloadRoute('/dashboard/attendance')
+    if (moduleEnabled('reports')) preloadRoute('/dashboard/reports/consultant')
+    if (moduleEnabled('userManual')) preloadRoute('/dashboard/user-manual')
     if (isAdmin) {
       preloadRoute('/invoice')
       preloadRoute('/dashboard/admin')
@@ -143,23 +144,20 @@ export default function Sidebar() {
     <aside className="sidebar" role="navigation" aria-label="Main navigation">
       {/* Logo */}
       <div className="sidebar-logo">
-        <img
-          src="/assets/fynd-sidebar-logo.png"
-          alt="FYND"
+        {companyConfig.branding.squareLogo ? <img
+          src={companyConfig.branding.squareLogo}
+          alt={companyConfig.company.shortName}
           className="sidebar-logo-image"
-          width="2000"
-          height="2000"
           decoding="async"
-          onError={() => console.error('FYND sidebar logo failed to load')}
-        />
+        /> : <strong className="sidebar-logo-fallback">{companyConfig.company.shortName}</strong>}
       </div>
 
       {/* Nav links */}
       <nav className="sidebar-nav">
-        {!pageViews.loading && navItems.filter(item => pageViews.canView(item.key)).map(renderNavItem)}
-        {!pageViews.loading && pageViews.canView('invoice') && (
+        {!pageViews.loading && navItems.filter(item => moduleEnabled(item.module) && pageViews.canView(item.key)).map(renderNavItem)}
+        {!pageViews.loading && moduleEnabled('invoices') && pageViews.canView('invoice') && (
           <>
-          <NavLink
+          {moduleEnabled('admin') && <NavLink
             to="/invoice"
             className={({ isActive }) =>
               `sidebar-nav-link${isActive ? ' active' : ''}`
@@ -171,7 +169,7 @@ export default function Sidebar() {
           >
             <span className="nav-icon"><FileText size={17} strokeWidth={1.8} /></span>
             <span className="sidebar-nav-label">Invoice</span>
-          </NavLink>
+          </NavLink>}
           <NavLink
             to="/dashboard/admin"
             className={({ isActive }) =>
@@ -187,7 +185,7 @@ export default function Sidebar() {
           </NavLink>
           </>
         )}
-        {!pageViews.loading && trailingNavItems.filter(item => item.external || pageViews.canView(item.key)).map(renderNavItem)}
+        {!pageViews.loading && trailingNavItems.filter(item => moduleEnabled(item.module) && (item.external || pageViews.canView(item.key))).map(renderNavItem)}
       </nav>
 
       {/* Bottom user + logout */}

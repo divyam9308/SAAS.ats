@@ -57,3 +57,4 @@ test('nested OR plus AND remains recursive through compilation', () => {
   assert.match(compiled, /^and\(or\(/)
   assert.match(compiled, /ai_budget_ceiling_lpa\.gt\."15"/)
 })
+

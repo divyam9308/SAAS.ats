@@ -1,6 +1,7 @@
 const { allocateNextDisplayId, isDisplayIdUniqueError } = require('./displayIdAllocator')
 const { candidateStatusError, cleanStatus: cleanCandidateStatus } = require('./candidateStatuses')
 const { resolveClientGroupScope } = require('./clientGroups')
+const { companyConfig } = require('../config/companyConfig')
 
 const CANDIDATE_FIELDS = Object.freeze([
   'full_name', 'email', 'mobile_number', 'city', 'state', 'location', 'current_designation',
@@ -163,7 +164,7 @@ async function insertCandidate(supabase, payload) {
 
 async function insertCandidateWithDisplayId(supabase, payload) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const candidateDisplayId = await allocateNextDisplayId({ supabase, table: 'candidates', column: 'candidate_display_id', prefix: 'CA' })
+    const candidateDisplayId = await allocateNextDisplayId({ supabase, table: 'candidates', column: 'candidate_display_id', prefix: companyConfig.ids.candidatePrefix })
     const result = await insertCandidate(supabase, { ...payload, candidate_display_id: candidateDisplayId })
     if (result.error && isDisplayIdUniqueError(result.error, 'candidate_display_id')) continue
     if (result.error || !result.data || result.data.candidate_display_id === candidateDisplayId) return result

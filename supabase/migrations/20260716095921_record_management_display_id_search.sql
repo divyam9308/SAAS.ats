@@ -197,3 +197,4 @@ revoke all on function public.admin_bulk_record_list(text, text, integer, intege
   from public, anon, authenticated;
 grant execute on function public.admin_bulk_record_list(text, text, integer, integer)
   to service_role;
+

@@ -19,3 +19,4 @@ async function manual(req, res) {
 }
 
 module.exports = { manual }
+

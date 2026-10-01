@@ -24,3 +24,4 @@ alter table public.jobs
   validate constraint jobs_public_listing_complete;
 
 commit;
+

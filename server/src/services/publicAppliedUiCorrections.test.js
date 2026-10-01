@@ -28,7 +28,7 @@ test('Mandate publication fields stay checkbox-gated and omit the slug control',
 })
 
 test('public page uses the brand header, multi-location filter, and optional application context fields', () => {
-  assert.match(publicRolesPage, /fyndbridge-official-logo/)
+  assert.match(publicRolesPage, /companyConfig\.branding\.horizontalLogo/)
   assert.match(publicRolesPage, />Back to Home<\/a>/)
   assert.match(publicRolesPage, /function LocationFilter/)
   assert.match(publicRolesPage, /aria-multiselectable="true"/)

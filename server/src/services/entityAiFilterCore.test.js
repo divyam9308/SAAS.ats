@@ -206,3 +206,4 @@ test('keyword mode is permission-aware and remains bounded to 24 leaves', () => 
   assert.throws(() => filter.buildKeywordFilter('Alpha', { allowedFields: ['status'] }), /No searchable/i)
   assert.throws(() => filter.buildKeywordFilter('x'.repeat(601)), /too long/i)
 })
+

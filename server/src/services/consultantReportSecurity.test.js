@@ -194,7 +194,7 @@ test('direct Overall Consultants requests reject forged ordinary/admin scope and
 })
 
 test('every report endpoint is mounted behind authentication and fresh Report page permission', () => {
-  assert.match(app, /app\.use\('\/api\/reports',\s*requireAuth,\s*require\('\.\/routes\/reports'\)\)/)
+  assert.match(app, /secureModule\('\/api\/reports',\s*'reports',\s*require\('\.\/routes\/reports'\)\)/)
   assert.match(routes, /router\.use\(requirePageViewPermission\('report'\)\)/)
   const guardPosition = routes.indexOf("router.use(requirePageViewPermission('report'))")
   for (const endpoint of [

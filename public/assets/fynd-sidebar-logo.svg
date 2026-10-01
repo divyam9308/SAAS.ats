@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">FyndBridge</title>
+  <rect width="64" height="64" rx="15" fill="#001264"/>
+  <path d="M14 18h36v8H23v8h22v8H23v12h-9V18Z" fill="#C9A227"/>
+  <path d="M40 10h10v8H40z" fill="#fff" opacity=".95"/>
+</svg>

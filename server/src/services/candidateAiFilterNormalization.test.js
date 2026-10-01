@@ -103,3 +103,4 @@ test('negative multi-column text conditions require every mapped column not to m
   assert.equal(evaluateCandidateAst(root, { organisation: ['Other', 'TCS'] }), false)
   assert.equal(evaluateCandidateAst(root, { organisation: ['Other', 'Another'] }), true)
 })
+

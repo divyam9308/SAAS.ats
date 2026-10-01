@@ -50,3 +50,4 @@ export function firstPermittedPageRoute(access, permissions, excludedKey = '') {
     .map(key => ({ key, route: PAGE_VIEW_ROUTES[key] }))
     .find(({ key }) => canViewPage(access, permissions[key] || PAGE_VIEW_DEFAULTS[key]))?.route || '/login'
 }
+

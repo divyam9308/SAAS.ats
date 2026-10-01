@@ -8,3 +8,4 @@ router.post('/heartbeat', controller.heartbeat)
 router.post('/offline', controller.offline)
 
 module.exports = router
+

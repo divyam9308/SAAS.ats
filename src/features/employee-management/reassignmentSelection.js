@@ -57,3 +57,4 @@ export function selectionPayload(selections) {
     excluded_ids: unique(value.excludedIds)
   }]))
 }
+

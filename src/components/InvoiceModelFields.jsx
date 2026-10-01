@@ -15,3 +15,4 @@ export default function InvoiceModelFields({ form, update }) {
   if (form.model === 'jra_adjustment_flat_fee') return <><Field label="Value (₹)"><Input name="jra_base_value" value={form.jra_base_value} update={update} inputMode="decimal" /></Field><Field label="Flat Fee / Adjustment (₹)"><Input name="jra_flat_fee" value={form.jra_flat_fee} update={update} inputMode="decimal" /></Field></>
   return <Field label="Amount (₹)"><Input name="others_amount" value={form.others_amount} update={update} inputMode="decimal" /></Field>
 }
+

@@ -57,3 +57,4 @@ export function preloadRoute(path) {
 export function preloadAuthenticatedRoute(path) {
   return Promise.allSettled([loadAuthenticatedShell(), preloadRoute(path)])
 }
+

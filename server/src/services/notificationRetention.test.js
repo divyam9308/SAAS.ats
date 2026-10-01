@@ -36,3 +36,4 @@ test('retention cleanup never targets pending or merely-read notifications', () 
     assert.doesNotMatch(statement, /status = 'pending'/)
   })
 })
+

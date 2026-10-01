@@ -44,3 +44,4 @@ test('copied mandate links use the preview route while direct preview keeps the 
   assert.match(routes, /router\.get\('\/open-roles\/:slug\/share', controller\.shareOpenRole\)/)
   assert.ok(vercel.rewrites.some(rewrite => rewrite.source === '/share/open-roles/:slug' && rewrite.destination === '/api/public/open-roles/:slug/share'))
 })
+

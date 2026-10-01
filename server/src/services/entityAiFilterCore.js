@@ -782,3 +782,4 @@ module.exports = {
   flattenConditions,
   createEntityFilter
 }
+

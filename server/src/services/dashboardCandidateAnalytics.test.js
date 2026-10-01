@@ -160,3 +160,4 @@ test('all dashboard table reads page deterministically and the backend fallback 
   }
   assert.match(dashboardControllerSource, /clean\(req\.query\.period\) \|\| currentDashboardFinancialYear\(\)/)
 })
+

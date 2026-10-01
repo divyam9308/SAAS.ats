@@ -77,3 +77,4 @@ async function uploadDocuments(files, bucket, folder = '') {
 }
 
 module.exports = { removeDocuments, removeUnreferencedDocuments, uploadDocument, uploadDocuments }
+

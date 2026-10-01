@@ -295,3 +295,4 @@ async function cleanupOldNotifications(req, res) {
 }
 
 module.exports = { listNotifications, markNotificationRead, clearReadNotifications, cleanupOldNotifications }
+

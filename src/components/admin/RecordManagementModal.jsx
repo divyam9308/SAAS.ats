@@ -402,3 +402,4 @@ export default function RecordManagementModal({ open, onClose, onSuccess }) {
     </div>
   ), document.body)
 }
+

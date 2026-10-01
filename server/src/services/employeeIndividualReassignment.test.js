@@ -112,3 +112,4 @@ test('reassignment adds no notification behavior or database writes', () => {
   assert.doesNotMatch(scoped, /notification helper|notifyReviewer|sendNotification|insert\s+into\s+public\.notifications/i)
   assert.doesNotMatch(migration, /update\s+public\.notifications|delete\s+from\s+public\.notifications/i)
 })
+

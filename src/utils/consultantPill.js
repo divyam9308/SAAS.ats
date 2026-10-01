@@ -10,3 +10,4 @@ export function getConsultantInitials(name) {
 
 export const getConsultantAvatarColor = (name) => PALETTE[hash(name) % PALETTE.length]
 export const cleanConsultantName = text
+

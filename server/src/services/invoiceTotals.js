@@ -1,5 +1,6 @@
 const MONEY_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)$/
-const BILLING_ENTITIES = ['FCS', 'FCAPL']
+const { billingEntities } = require('../config/companyConfig')
+const BILLING_ENTITIES = billingEntities().map(entity => entity.key)
 
 function decimalText(value) {
   const text = String(value ?? '').replace(/₹|â‚¹|Rs\.?|,/gi, '').trim()

@@ -78,3 +78,4 @@ begin
     alter publication supabase_realtime add table public.client_follow_ups;
   end if;
 end $$;
+

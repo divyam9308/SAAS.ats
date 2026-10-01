@@ -1,6 +1,7 @@
 const OPERATORS = ['contains', 'equals', 'not_equals', 'starts_with', 'ends_with', 'greater_than', 'greater_than_or_equal', 'less_than', 'less_than_or_equal', 'between', 'before', 'after', 'on', 'is_empty', 'is_not_empty', 'in']
 const { CANDIDATE_STATUSES, canonicalCandidateStatus } = require('./candidateStatuses')
 const { MANDATE_STATUSES, normalizeMandateStatus: canonicalMandateStatus } = require('./mandateStatuses')
+const { companyConfig } = require('../config/companyConfig')
 
 const BUDGETS = ['0-5 lac', '5-10 lac', '10-15 lac', '15-20 lac', '20-25 lac', '25-30 lac', '30-35 lac', '35-40 lac', '40-50 lac', '50-60 lac', '60-70 lac', '70-80 lac', '80-100 lac', '100-150 lac', '>150 lac']
 
@@ -670,12 +671,13 @@ function parsePrompt(page, prompt) {
     if (mandateFor) add('client_name', 'contains', mandateFor[1])
   }
 
-  const idMatch = text.match(/\b(CA\d+|CL\d+|JB\d+)\b/i)
+  const prefixes = [companyConfig.ids.candidatePrefix, companyConfig.ids.clientPrefix, companyConfig.ids.jobPrefix]
+  const idMatch = text.match(new RegExp(`\\b((?:${prefixes.map(escapeRegExp).join('|')})\\d+)\\b`, 'i'))
   if (idMatch) {
     const id = idMatch[1].toUpperCase()
-    if (id.startsWith('CA') && config.fields.candidate_id) add('candidate_id', 'equals', id)
-    if (id.startsWith('CL') && config.fields.client_id) add('client_id', 'equals', id)
-    if (id.startsWith('JB') && config.fields.job_id) add('job_id', 'equals', id)
+    if (id.startsWith(companyConfig.ids.candidatePrefix.toUpperCase()) && config.fields.candidate_id) add('candidate_id', 'equals', id)
+    if (id.startsWith(companyConfig.ids.clientPrefix.toUpperCase()) && config.fields.client_id) add('client_id', 'equals', id)
+    if (id.startsWith(companyConfig.ids.jobPrefix.toUpperCase()) && config.fields.job_id) add('job_id', 'equals', id)
   }
 
   if (config.fields.mandate_status) {

@@ -117,3 +117,4 @@ test('open clock-ins are present today and become not marked after midnight', ()
   assert.equal(summary.records.find((record) => record.attendance_date === '2026-07-15').status, 'clocked_in')
   assert.equal(summary.days.find((day) => day.date === '2026-07-14').record.clock_in_at, '2026-07-14T04:00:00Z')
 })
+

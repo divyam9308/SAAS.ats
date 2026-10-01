@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { isSupabaseConfigured, supabase } from '../services/supabaseClient'
+import { isLocalDemo, isSupabaseConfigured, supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/useAuth'
+import { companyConfig, loginRestrictionLabel } from '../config/companyConfig'
 import './LoginPage.css'
 
 function GoogleIcon() {
@@ -28,6 +29,8 @@ function AlertIcon() {
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
@@ -35,8 +38,7 @@ export default function LoginPage() {
   useEffect(() => {
     const reason = searchParams.get('error')
     if (reason === 'domain') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError('Only @fyndbridge.in accounts are allowed.')
+      setError(loginRestrictionLabel())
     } else if (reason === 'inactive') {
       setError(window.sessionStorage.getItem('fb_login_message') || 'Your account has been deactivated. Please contact an administrator.')
       window.sessionStorage.removeItem('fb_login_message')
@@ -61,19 +63,39 @@ export default function LoginPage() {
 
     setLoading(true)
 
+    const hostedDomain = companyConfig.authentication.mode === 'domain' || companyConfig.authentication.mode === 'domains'
+      ? companyConfig.authentication.allowedDomains?.[0]
+      : ''
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
-        hd: 'fyndbridge.in',
-        queryParams: {
-          hd: 'fyndbridge.in',
-        },
+        ...(hostedDomain ? { queryParams: { hd: hostedDomain } } : {}),
       },
     })
 
     if (oauthError) {
       setError(oauthError.message)
+      setLoading(false)
+    }
+  }
+
+  const handleDemoLogin = async () => {
+    setError('')
+    setLoading(true)
+    const { error: demoError } = await supabase.auth.signInWithPassword({ email: 'demo@localhost.test', password: 'demo' })
+    if (demoError) setError(demoError.message)
+    setLoading(false)
+  }
+
+  const handlePasswordLogin = async (event) => {
+    event.preventDefault()
+    setError('')
+    if (!isSupabaseConfigured || !supabase) return setError('Supabase login is not configured.')
+    setLoading(true)
+    const { error: passwordError } = await supabase.auth.signInWithPassword({ email, password })
+    if (passwordError) {
+      setError(passwordError.message)
       setLoading(false)
     }
   }
@@ -85,38 +107,30 @@ export default function LoginPage() {
         <div className="login-panel-circle login-panel-circle-left-sm" aria-hidden="true" />
 
         <div className="login-brand" role="banner">
-          <picture>
-            <source
-              srcSet="/assets/fyndbridge-official-logo-380.webp 380w, /assets/fyndbridge-official-logo.webp 543w"
-              sizes="(max-width: 480px) calc(100vw - 40px), 380px"
-              type="image/webp"
-            />
+          {companyConfig.branding.horizontalLogo ? (
             <img
-              src="/assets/fyndbridge-official-logo.png"
-              alt="FYNDBRIDGE"
+              src={companyConfig.branding.horizontalLogo}
+              alt={companyConfig.company.displayName}
               className="login-brand-logo"
               width="380"
               height="63"
               fetchPriority="high"
               decoding="async"
-              onError={() => console.error('FYNDBRIDGE logo failed to load')}
             />
-          </picture>
+          ) : <strong className="login-brand-text">{companyConfig.company.atsProductName}</strong>}
         </div>
 
         <div className="login-left-content">
           <p className="login-eyebrow">ATS Platform</p>
 
           <h1 className="login-hero-title">
-            &ldquo;Hiring Is Not A Transaction.
-            <br />
-            It&apos;s A Transformation.&rdquo;
+            &ldquo;{companyConfig.branding.loginHeadline}&rdquo;
           </h1>
 
           <div className="login-divider" aria-hidden="true" />
 
           <p className="login-hero-copy">
-            Your internal command centre for executive search and talent placement.
+            {companyConfig.branding.loginSubheading}
           </p>
         </div>
 
@@ -145,7 +159,17 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button
+            {isLocalDemo && <button
+              type="button"
+              id="login-demo"
+              className={`login-btn${loading ? ' loading' : ''}`}
+              disabled={loading}
+              onClick={handleDemoLogin}
+            >
+              {loading ? <span className="btn-spinner" aria-label="Signing in…" /> : 'Enter demo workspace'}
+            </button>}
+
+            {!isLocalDemo && companyConfig.authentication.googleEnabled && <button
               type="button"
               id="login-google"
               className={`login-btn google-login-btn${loading ? ' loading' : ''}`}
@@ -160,13 +184,19 @@ export default function LoginPage() {
                   Continue with Google
                 </>
               )}
-            </button>
+            </button>}
 
-            <p className="login-permission-note">Only @fyndbridge.in accounts are permitted</p>
+            {!isLocalDemo && companyConfig.authentication.passwordEnabled && <form className="login-password-form" onSubmit={handlePasswordLogin}>
+              <input type="email" autoComplete="email" placeholder="Work email" value={email} onChange={event => setEmail(event.target.value)} required />
+              <input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={event => setPassword(event.target.value)} required />
+              <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Signing in…' : 'Sign in with email'}</button>
+            </form>}
+
+            <p className="login-permission-note">{isLocalDemo ? 'Local testing mode — no real account is required' : loginRestrictionLabel()}</p>
           </div>
         </div>
 
-        <p className="login-footer-note">© 2025 FyndBridge. Internal use only.</p>
+        <p className="login-footer-note">© {new Date().getFullYear()} {companyConfig.company.displayName}. {companyConfig.branding.footerText}</p>
       </section>
     </main>
   )

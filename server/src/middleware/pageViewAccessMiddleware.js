@@ -23,3 +23,4 @@ function requirePageViewPermission(pageKey, dependencies = {}) {
 }
 
 module.exports = { requirePageViewPermission }
+

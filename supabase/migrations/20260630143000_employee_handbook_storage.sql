@@ -8,3 +8,4 @@ set public = false,
 insert into public.app_settings (key, value)
 values ('employee_handbook', '{}'::jsonb)
 on conflict (key) do nothing;
+

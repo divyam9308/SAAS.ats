@@ -85,3 +85,4 @@ function buildTodayAttendanceSummary({ date, profiles, attendanceRecords = [], a
 }
 
 module.exports = { buildActiveProfiles, buildTodayAttendanceSummary }
+

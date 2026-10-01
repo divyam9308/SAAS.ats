@@ -159,3 +159,4 @@ drop trigger if exists trg_00_candidates_root_client_id on public.candidates;
 create trigger trg_00_candidates_root_client_id
 before insert or update of client_id on public.candidates
 for each row execute function public.canonicalize_client_group_root_id();
+

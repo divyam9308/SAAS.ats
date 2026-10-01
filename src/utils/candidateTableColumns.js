@@ -37,3 +37,4 @@ export const mergeCandidateColumnPreference = (value) => {
   if (!saved.length) return null
   return saved
 }
+

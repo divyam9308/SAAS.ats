@@ -139,3 +139,4 @@ where is_public = true
   and mandate_status is distinct from 'Ongoing (P1)';
 
 commit;
+

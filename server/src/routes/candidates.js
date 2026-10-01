@@ -24,3 +24,4 @@ router.patch('/:id', candidateCvUpload, handleUploadErrors, controller.updateCan
 router.delete('/:id', controller.deleteCandidate)
 
 module.exports = router
+

@@ -155,3 +155,4 @@ export const logCandidateCvOpen = (candidate) => {
   if (import.meta.env?.DEV) console.log('[CV open]', { candidateId: candidate?.candidateId || candidate?.id || '' })
 }
 export { normalizeExternalUrl, openExternalUrl, openProtectedDocumentPath } from '../services/apiClient'
+

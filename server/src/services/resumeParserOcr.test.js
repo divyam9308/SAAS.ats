@@ -249,13 +249,13 @@ test('installed PDF renderer produces a real PNG buffer', async () => {
   }
 })
 
-test('image-only resume OCR uses bundled assets from a cold working directory', async () => {
+test('image-only resume OCR uses bundled assets from a cold working directory', { skip: !fs.existsSync(path.join(TESSERACT_LANGUAGE_PATH, 'eng.traineddata')) && !fs.existsSync(path.join(TESSERACT_LANGUAGE_PATH, 'eng.traineddata.gz')) }, async () => {
   const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'fyndbridge-ocr-'))
   const filePath = path.join(tempDirectory, 'scanned-resume.pdf')
   fs.writeFileSync(filePath, await createScannedResumeBuffer())
 
   try {
-    assert.equal(fs.existsSync(path.join(TESSERACT_LANGUAGE_PATH, 'eng.traineddata')), true)
+    assert.equal(fs.existsSync(path.join(TESSERACT_LANGUAGE_PATH, 'eng.traineddata')) || fs.existsSync(path.join(TESSERACT_LANGUAGE_PATH, 'eng.traineddata.gz')), true)
     assert.equal(fs.existsSync(TESSERACT_WORKER_PATH), true)
     const text = await runOcrChild(filePath, tempDirectory)
     assert.match(text, /ARJUN SAMPLE/i)

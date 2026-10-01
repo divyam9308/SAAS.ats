@@ -8,3 +8,4 @@ create index if not exists candidates_name_email_duplicate_idx
 
 create index if not exists clients_name_email_duplicate_idx
   on public.clients (lower(trim(name)), lower(trim(email)));
+
