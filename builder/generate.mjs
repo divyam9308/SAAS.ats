@@ -3,10 +3,14 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createRequire } from 'node:module'
 import { safeCompanySlug } from '../config/config-core.js'
 import { validateConfig } from '../shared/ats-config.cjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const require = createRequire(import.meta.url)
+const { openDatabase, createStore, seedCompany, now } = require('../server/src/platform/database.js')
+const { activateConfiguration } = require('../server/src/platform/config-lifecycle.js')
 const json = value => JSON.stringify(value, null, 2) + '\n'
 const execFileAsync = promisify(execFile)
 const WORKSPACE_ENTRIES = ['eslint.config.js', 'index.html', 'public', 'server', 'src', 'vite.config.js']
@@ -168,29 +172,44 @@ export async function applyCompanyConfig(inputConfig) {
   await writeFile(join(root, 'configs', `${config.company.slug}.json`), json(config))
   const databaseFile = join(root, 'generated', config.company.slug, 'workspace', 'server', 'data', 'platform.sqlite')
   let databaseUpdated = false
+  let version = null
   if (await exists(databaseFile)) {
-    const { DatabaseSync } = await import('node:sqlite')
-    const db = new DatabaseSync(databaseFile)
+    const db = openDatabase(databaseFile)
     try {
-      const current = db.prepare('SELECT active_version FROM platform_config WHERE company_id=?').get('local-company')
-      if (current) {
-        const timestamp = new Date().toISOString()
-        const version = current.active_version + 1
-        const serialized = JSON.stringify(config)
-        db.prepare('UPDATE platform_config SET active=?,draft=?,active_version=?,updated_at=? WHERE company_id=?').run(serialized, serialized, version, timestamp, 'local-company')
-        db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)').run('local-company', version, serialized, 'builder', timestamp, 'Applied by ATS Builder')
-        db.prepare('DELETE FROM platform_users WHERE company_id=?').run('local-company')
-        for (const user of config.users || []) {
-          const role = config.roles?.find(item => item.id === user.roleId)
-          const unit = config.organization?.units?.find(item => item.id === user.departmentId)
-          const location = config.organization?.locations?.find(item => item.id === user.locationId)
-          db.prepare('INSERT INTO platform_users(company_id,id,data) VALUES(?,?,?)').run('local-company', user.id, JSON.stringify({ ...user, role: user.roleId, roleName: role?.name || user.roleId, department: unit?.name || '', location: location?.name || '' }))
-        }
-        databaseUpdated = true
-      }
+      const result = activateConfiguration(db, { config, actorId: 'builder', note: 'Applied by ATS Builder' })
+      version = result.version
+      databaseUpdated = true
     } finally { db.close() }
   }
-  return { slug: config.company.slug, configFile: target, applied: true, databaseUpdated }
+  return { slug: config.company.slug, configFile: target, applied: true, databaseUpdated, version }
+}
+
+export async function applyFactoryConfig(inputConfig, { dbPath } = {}) {
+  const config = validateForGeneration(inputConfig)
+  config.company.slug = safeCompanySlug(config.company.slug || config.company.name)
+  const databaseFile = resolve(dbPath || process.env.ATS_PLATFORM_DB || join(root, 'server', 'data', 'platform-local.sqlite'))
+  const db = openDatabase(databaseFile)
+  try {
+    // A first-time factory should seed demo records that match the configuration
+    // being applied. Existing databases keep all operational records untouched.
+    seedCompany(db, 'local-company', config)
+    const store = createStore(db, 'local-company')
+    const audit = (event, kind, recordId, details = {}) => {
+      const createdAt = now()
+      db.prepare('INSERT INTO platform_audit(company_id,actor_id,action,kind,record_id,details,created_at) VALUES(?,?,?,?,?,?,?)')
+        .run('local-company', 'builder', event, kind || null, recordId || null, JSON.stringify(details), createdAt)
+      store.put('audit', { actorId: 'builder', action: event, kind: kind || null, recordId: recordId || null, details, createdAt }, 'builder')
+    }
+    const result = activateConfiguration(db, {
+      config,
+      actorId: 'builder',
+      note: 'Applied to factory ATS by ATS Builder',
+      audit,
+    })
+    return { slug: config.company.slug, applied: true, databaseUpdated: true, version: result.version, target: 'factory' }
+  } finally {
+    db.close()
+  }
 }
 
 function argument(name) { const index = process.argv.indexOf(name); return index >= 0 ? process.argv[index + 1] : '' }

@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { applyCompanyConfig, generateCompanyPackage } from './generate.mjs'
+import { applyCompanyConfig, applyFactoryConfig, generateCompanyPackage } from './generate.mjs'
 import { defaults, validateConfig } from '../shared/ats-config.cjs'
 
 const host = '127.0.0.1'
@@ -51,7 +51,12 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && request.url === '/api/generate') {
       const payload = await body(request)
       const result = await generateCompanyPackage(payload.config)
-      const applied = payload.activate ? await applyCompanyConfig(payload.config) : null
+      let applied = null
+      if (payload.activate) {
+        const generated = await applyCompanyConfig(payload.config)
+        const factory = await applyFactoryConfig(payload.config)
+        applied = { ...factory, generated }
+      }
       return send(response, 201, {
         ...result,
         applied,
@@ -62,7 +67,7 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'POST' && request.url === '/api/apply') {
       const payload = await body(request)
-      return send(response, 200, await applyCompanyConfig(payload.config || payload))
+      return send(response, 200, await applyFactoryConfig(payload.config || payload))
     }
     if (request.method === 'GET' && /^\/api\/download\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(request.url || '')) {
       const slug = request.url.slice('/api/download/'.length)

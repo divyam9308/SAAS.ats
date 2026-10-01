@@ -18,6 +18,13 @@ server/.env
 server/.env.*
 !.env.example
 !server/.env.example
+
+# Local/generated artifacts that may contain candidate or customer data.
+# Keep deterministic test fixtures under a dedicated tests/fixtures directory.
+/src/data/masterCandidates.js
+/upload/
+/output/
+/outputs/
 !generated/**/.env.example
 
 # Editor directories and files

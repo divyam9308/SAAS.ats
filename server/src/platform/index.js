@@ -28,6 +28,7 @@ const { evaluateSla } = require('./sla-rules');
 const { normalizeSource, configuredSource } = require('./source-options');
 const { createInterviewReminderScheduler } = require('./local-scheduler');
 const { InterviewCalendarError, validateInterviewSchedule, findInterviewConflict, createMockCalendarEvent, transitionMockCalendarEvent } = require('./interview-calendar');
+const { activateConfiguration, syncConfiguredUsers } = require('./config-lifecycle');
 
 const COMPANY = 'local-company';
 const send = (res, data, status = 200) => res.status(status).json({ data });
@@ -1090,12 +1091,20 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   router.get('/config/presets', (req, res) => { if (!permitted(req, res, 'organization', 'view')) return; const { defaults, presets } = require('../../../shared/ats-config.cjs'); send(res, presets.map(p => ({ ...p, config: defaults(p.id) }))); });
   router.post('/config/activate', (req, res) => {
     if (!permitted(req, res, 'organization', 'administer')) return;
-    const draft = parseJson(cfgRow().draft, {}); const validation = require('../../../shared/ats-config.cjs').validateConfig(draft);
-    if (!validation.valid) return res.status(422).json({ error: 'Configuration is invalid', details: validation.errors, warnings: validation.warnings });
-    const version = cfgRow().active_version + 1; const timestamp = now();
-    db.prepare('UPDATE platform_config SET active=?,active_version=?,updated_at=? WHERE company_id=?').run(JSON.stringify(draft), version, timestamp, COMPANY);
-    db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)').run(COMPANY, version, JSON.stringify(draft), req.actor.id, timestamp, req.body?.data?.note || 'Activated draft');
-    syncUsers(draft); audit(req.actor.id, 'configuration.activated', 'config', null, { version }); send(res, { version, config: draft });
+    const draft = parseJson(cfgRow().draft, {});
+    try {
+      const result = activateConfiguration(db, {
+        config: draft,
+        actorId: req.actor.id,
+        note: req.body?.data?.note || 'Activated draft',
+        companyId: COMPANY,
+        audit: (event, kind, recordId, details) => audit(req.actor.id, event, kind, recordId, details),
+      });
+      send(res, { version: result.version, config: result.config });
+    } catch (error) {
+      if (error.status === 422) return res.status(422).json({ error: error.message, details: error.details, warnings: error.warnings });
+      throw error;
+    }
   });
   router.post('/config/rollback', (req, res) => {
     if (!permitted(req, res, 'organization', 'administer')) return;
@@ -1103,7 +1112,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     if (!prior) return fail(res, 404, 'Configuration version not found');
     const configData = parseJson(prior.config, {}); const next = cfgRow().active_version + 1; const timestamp = now();
     db.prepare('UPDATE platform_config SET active=?,draft=?,active_version=?,updated_at=? WHERE company_id=?').run(prior.config, prior.config, next, timestamp, COMPANY);
-    db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)').run(COMPANY, next, prior.config, req.actor.id, timestamp, `Rollback to version ${version}`); syncUsers(configData); audit(req.actor.id, 'configuration.rolled-back', 'config', null, { from: version, version: next }); send(res, { version: next, config: configData });
+    db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)').run(COMPANY, next, prior.config, req.actor.id, timestamp, `Rollback to version ${version}`); syncConfiguredUsers(db, configData, COMPANY); audit(req.actor.id, 'configuration.rolled-back', 'config', null, { from: version, version: next }); send(res, { version: next, config: configData });
   });
 
   router.get('/public/jobs', (req, res) => send(res, store.list('jobs').filter(j => j.status === 'open' && j.visibility === 'public' && moduleEnabled(config(), 'careers')).map(j => publicJob(j, config()))));
@@ -1119,8 +1128,17 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const answers = data.answers && typeof data.answers === 'object' ? { ...data, ...data.answers } : { ...data };
     if (data.email !== undefined) answers.email = data.email;
     const formFields = (form?.sections || []).flatMap(section => section.fields || []).filter(field => fieldIsApplicable(field, answers));
+    const uploadField = preferredApplicationUploadField(formFields);
+    const uploadFieldId = uploadField && applicationFieldId(uploadField);
+    const configuredUpload = uploadFieldId ? answers[uploadFieldId] : null;
+    const applicationUpload = isFileUpload(configuredUpload) ? configuredUpload : isFileUpload(data.resume) ? data.resume : null;
+    // The careers UI submits the selected file through the canonical `resume`
+    // transport key. Map it back to the configured file field before validation
+    // so buyers can rename the field without changing the storage contract.
+    if (uploadFieldId && applicationUpload && !isFileUpload(configuredUpload)) answers[uploadFieldId] = applicationUpload;
     const formValidation = require('../../../shared/ats-config.cjs').validateFields(formFields, answers);
     if (!formValidation.valid) return res.status(422).json({ error: 'Application form is incomplete or invalid', details: formValidation.errors });
+    if (uploadFieldId && answers[uploadFieldId] != null && !isFileUpload(answers[uploadFieldId])) return fail(res, 422, `${uploadField.label || uploadFieldId} must include a filename and file content`);
     if (!data.email || !data.fullName) return fail(res, 422, 'Full name and email are required');
     if (cfg.privacy?.consentRequired !== false && data.consent !== true) return fail(res, 422, 'Privacy consent is required');
     const knockout = (form?.knockoutQuestions || []).find(q => knockoutTriggered(q, answers));
@@ -1137,14 +1155,17 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     if (prepared.duplicateReview) return send(res, { status: 'received' }, 201);
     let candidate;
     const pipeline = config().pipelines?.find(p => p.id === job.pipelineId) || config().pipelines?.find(p => p.default) || config().pipelines?.[0];
-    const cleanAnswers = Object.fromEntries(formFields.map(field => { const id = String(field.id || field.key || field.field); return [id, answers[id]]; }).filter(([, value]) => value !== undefined));
+    const cleanAnswers = Object.fromEntries(formFields.map(field => {
+      const id = applicationFieldId(field);
+      return [id, sanitizeApplicationAnswer(answers[id], field.type === 'file')];
+    }).filter(([, value]) => value !== undefined));
     let document;
     let transactionOpen = false;
     try {
       db.exec('BEGIN IMMEDIATE'); transactionOpen = true;
       candidate = store.put('candidates', { name: prepared.candidateDetails.name, email: prepared.candidateDetails.email, phone: prepared.candidateDetails.phone, consentStatus: data.consent ? 'granted' : 'pending', source: careerSourceLabel, ownerId: null }, 'public');
       const app = store.put('applications', { candidateId: candidate.id, jobId: job.id, stage: pipeline?.stages?.[0]?.id || pipeline?.stages?.[0]?.name || 'applied', status: 'active', source: careerSourceLabel, pipelineId: pipeline?.id, ownerId: job.recruiterId || null, answers: cleanAnswers }, 'public');
-      if (data.resume?.filename && data.resume?.contentBase64) document = attachDocument(store, data.resume, { candidateId: candidate.id, applicationId: app.id }, dataDir, 'public', cfg);
+      if (applicationUpload) document = attachDocument(store, applicationUpload, { candidateId: candidate.id, applicationId: app.id }, dataDir, 'public', cfg);
       audit('public', 'application.submitted', 'applications', app.id, { jobId: job.id });
       emitEvent({ config: cfg, actor: { id: 'public' }, localsUsers: users(), localsAudit: audit }, store, 'application.created', { ...app, __kind: 'applications' });
       db.exec('COMMIT'); transactionOpen = false;
@@ -1298,10 +1319,6 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
 
   return router;
 
-  function syncUsers(cfg) {
-    db.prepare('DELETE FROM platform_users WHERE company_id=?').run(COMPANY);
-    for (const u of cfg.users || []) { const role = cfg.roles?.find(r => r.id === u.roleId); const unit = cfg.organization?.units?.find(x => x.id === u.departmentId); const loc = cfg.organization?.locations?.find(x => x.id === u.locationId); db.prepare('INSERT INTO platform_users(company_id,id,data) VALUES(?,?,?)').run(COMPANY, u.id, JSON.stringify({ ...u, role: u.roleId, roleName: role?.name || u.roleId, department: unit?.name || '', location: loc?.name || '' })); }
-  }
   function scopedMetrics(req) {
     const recordsByKind = Object.fromEntries(RECORD_KINDS.map(kind => [kind, store.list(kind)]));
     return computePlatformMetrics({ recordsByKind, config: req.config, actor: req.actor, scopeRecord: (kind, record) => readable(req, record, kind) });
@@ -1433,6 +1450,31 @@ function fieldIsApplicable(field, answers) {
     case 'falsy': return !actual;
     default: return actual === expected;
   }
+}
+function applicationFieldId(field) {
+  return String(field?.id || field?.key || field?.field || '');
+}
+function preferredApplicationUploadField(fields = []) {
+  const uploads = fields.filter(field => field?.type === 'file');
+  return uploads.find(field => /resume|cv/i.test(`${applicationFieldId(field)} ${field.label || ''}`)) || uploads[0] || null;
+}
+function isFileUpload(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && value.filename && value.contentBase64);
+}
+function sanitizeApplicationAnswer(value, fileField = false) {
+  if (value === undefined || value === null) return value;
+  if (fileField) {
+    if (typeof value !== 'object' || Array.isArray(value)) return value;
+    const metadata = {};
+    if (value.filename) metadata.filename = path.basename(String(value.filename));
+    if (value.mimeType) metadata.mimeType = String(value.mimeType);
+    return metadata;
+  }
+  if (Array.isArray(value)) return value.map(item => sanitizeApplicationAnswer(item));
+  if (typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => key.toLowerCase() !== 'contentbase64')
+    .map(([key, item]) => [key, sanitizeApplicationAnswer(item)]));
 }
 function knockoutTriggered(question, answers) {
   const key = question.field || question.id || question.key; const value = answers[key];

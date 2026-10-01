@@ -498,6 +498,38 @@ test('configured sequential approval creates a publishable job and public applic
   assert.deepEqual(duplicate.data, { status: 'received' });
 });
 
+test('public application stores configured file answers as metadata without duplicating attachment bytes', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    const fields = config.applicationForms[0].sections[0].fields;
+    const resumeIndex = fields.findIndex(field => field.type === 'file');
+    fields[resumeIndex] = { field: 'candidateCvUpload', label: 'Candidate CV', type: 'file', required: true };
+  });
+  const job = (await request('/public/jobs', { user: 'no-login' })).data[0];
+  const fileContent = 'Private resume content that belongs only in document storage';
+  const contentBase64 = Buffer.from(fileContent).toString('base64');
+  const applied = await request(`/public/jobs/${job.id}/apply`, { user: 'no-login', method: 'POST', body: { data: {
+    fullName: 'Private Applicant', email: 'private-applicant@example.test', consent: true,
+    answers: { candidateCvUpload: { filename: '../private-cv.txt', mimeType: 'text/plain', contentBase64 } }
+  } } });
+  assert.equal(applied.status, 201, JSON.stringify(applied.payload));
+  assert.equal(JSON.stringify(applied.payload).includes(contentBase64), false, 'Application response must not echo attachment bytes');
+
+  const persisted = await request(`/records/applications/${applied.data.applicationId}`);
+  assert.equal(persisted.status, 200, JSON.stringify(persisted.payload));
+  assert.deepEqual(persisted.data.answers.candidateCvUpload, { filename: 'private-cv.txt', mimeType: 'text/plain' });
+  assert.equal(JSON.stringify(persisted.data).includes(contentBase64), false, 'Application answers must not persist attachment bytes');
+  assert.equal(JSON.stringify(persisted.data).includes('contentBase64'), false, 'Application answers must not retain the upload payload key');
+
+  const documents = await request('/records/documents');
+  const document = documents.data.find(item => item.applicationId === applied.data.applicationId);
+  assert.ok(document, 'Configured CV upload should still create a document record');
+  assert.equal(document.filename, 'private-cv.txt');
+  assert.equal(Object.hasOwn(document, 'contentBase64'), false, 'Document metadata must not persist attachment bytes');
+  const download = await request(`/documents/${document.id}/download`);
+  assert.equal(download.status, 200);
+  assert.equal(download.data, fileContent);
+});
+
 test('employee referral submission is owned, normalized, and duplicate review does not create another candidate', async t => {
   const { request } = await instance(t, 'startup', config => {
     config.modules.referrals = true;
