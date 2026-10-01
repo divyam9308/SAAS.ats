@@ -130,6 +130,20 @@ function getTerm(config, key) {
   const value = config?.terminology?.[key] || config?.terminology?.entities?.[key]
   return typeof value === 'string' && value ? value : DEFAULT_LABELS[key] || ENTITIES[key]?.label || humanize(key)
 }
+function getSingularTerm(config, key) {
+  const plural = getTerm(config, key)
+  const explicit = config?.terminology?.[key]?.singular || config?.terminology?.entities?.[key]?.singular
+  if (typeof explicit === 'string' && explicit.trim()) return explicit.trim()
+  if (/ies$/i.test(plural)) return `${plural.slice(0, -3)}y`
+  if (/ses$/i.test(plural)) return plural.slice(0, -2)
+  if (/s$/i.test(plural)) return plural.slice(0, -1)
+  return plural
+}
+function regionalHour(regional = {}, date = new Date()) {
+  try {
+    return Number(new Intl.DateTimeFormat('en-US', { timeZone: regional.timezone || 'UTC', hour: 'numeric', hourCycle: 'h23' }).formatToParts(date).find((part) => part.type === 'hour')?.value)
+  } catch { return date.getHours() }
+}
 function moduleOn(modules, key) {
   if (!modules) return true
   const entry = modules[key]
@@ -457,7 +471,7 @@ export default function PlatformApp() {
   const canViewSection = useCallback((key) => {
     if (key === 'overview') return hasPermission(user, 'dashboard')
     if (key === 'reports') return hasPermission(user, 'reporting') && moduleOn(bootstrap?.modules, 'reporting')
-    if (key === 'settings') return user?.roleId === 'admin' || user?.role === 'admin' || user?.permissions?.includes('platform:admin') || user?.permissions?.includes('*')
+    if (key === 'settings') return hasPermission(user, 'organization', 'administer') || user?.permissions?.includes('platform:admin') || user?.permissions?.includes('*')
     const moduleKey = MODULE_FOR[key] || key
     return (!bootstrap?.modules || moduleOn(bootstrap.modules, moduleKey))
       && (!AGENCY_FEATURE_FOR[key] || agencyFeatureOn(bootstrap?.config || {}, key))
@@ -475,7 +489,8 @@ export default function PlatformApp() {
     else navigate('/careers-platform', { replace: true })
   }, [bootstrap, user, visibleGroups, activeKey, navigate])
   const activeItem = NAV_GROUPS.flatMap((group) => group.items).find((item) => item.key === activeKey)
-  const entity = ENTITIES[activeKey]
+  const baseEntity = ENTITIES[activeKey]
+  const entity = baseEntity ? { ...baseEntity, label: getTerm(config, activeKey), singular: getSingularTerm(config, activeKey) } : null
   const formConfig = { ...config, users: bootstrap?.users || config.users || [] }
   const customFields = entity ? configCustomFields(config, activeKey) : []
   const formFields = entity ? [
@@ -703,7 +718,7 @@ export default function PlatformApp() {
       <div className="platform-brand"><div className="platform-brand-mark">{config.branding?.logo || config.branding?.horizontalLogo ? <img src={config.branding.logo || config.branding.horizontalLogo} alt="" /> : <span>{String(rootName).slice(0,1).toUpperCase()}</span>}</div><div className="platform-brand-copy"><strong>{rootName}</strong><small>{config.company?.name || 'Hiring workspace'}</small></div><button className="platform-icon-button platform-mobile-close" onClick={() => setMobileNav(false)} aria-label="Close menu"><X size={18} /></button></div>
       <button className="platform-workspace-switch" onClick={() => setUserMenu((value) => !value)}><span className="platform-workspace-dot" /><span><strong>{config.company?.name || rootName}</strong><small>Local demo workspace</small></span><ChevronDown size={15} /></button>
       <nav className="platform-nav" aria-label="Workspace navigation">{visibleGroups.map((group) => <div className="platform-nav-group" key={group.title}><div className="platform-nav-heading">{group.title}</div>{group.items.map(({ key, label, icon: Icon }) => <button key={key} className={`platform-nav-link ${activeKey === key ? 'is-active' : ''}`} onClick={() => changeSection(key)}><Icon size={17} strokeWidth={1.8} /><span>{getTerm(config, key) || label}</span>{key === 'approvals' && Number(bootstrap.counts?.pendingApprovals) > 0 && <em>{bootstrap.counts.pendingApprovals}</em>}</button>)}</div>)}</nav>
-      <div className="platform-sidebar-bottom"><div className="platform-demo-note"><span className="platform-live-dot" /> Local demo mode</div><a href="/careers-platform" className="platform-careers-link"><Globe2 size={16} /> View careers site <ArrowUpRight /></a></div>
+      <div className="platform-sidebar-bottom"><div className="platform-demo-note"><span className="platform-live-dot" /> Local demo mode</div>{canViewSection('careers') && <a href="/careers-platform" className="platform-careers-link"><Globe2 size={16} /> View careers site <ArrowUpRight /></a>}</div>
     </aside>
     {mobileNav && <button className="platform-mobile-scrim" onClick={() => setMobileNav(false)} aria-label="Close navigation" />}
     <main className="platform-main">
@@ -716,7 +731,7 @@ export default function PlatformApp() {
       <div className="platform-content">
         {error && <div className="platform-alert platform-alert--error" role="alert"><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss"><X size={16} /></button></div>}
         {notice && <div className="platform-alert platform-alert--success" role="status"><Check size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss"><X size={16} /></button></div>}
-        {activeKey === 'overview' ? <Overview config={config} dashboard={dashboard} counts={bootstrap.counts} user={user} onNavigate={changeSection} slaOverview={slaOverview} slaOverviewLoading={slaOverviewLoading} slaOverviewError={slaOverviewError} onRefreshSla={refreshSlaOverview} canViewSlaOverview={canViewSlaOverview} /> : activeKey === 'reports' ? <ReportsPage reports={reports} loading={loading} workforceTargetReport={workforceTargetReport} workforceTargetLoading={workforceTargetLoading} workforceTargetError={workforceTargetError} showWorkforceTargets={canViewWorkforceTargetReport} /> : activeKey === 'settings' ? <Settings config={config} onActivated={async () => { await refreshBootstrap(); await refreshDashboard(); setNotice('Configuration activated') }} /> : entity ? <EntityPage key={`${activeKey}:${user?.id || ''}`} kind={activeKey} meta={entity} label={getTerm(config, activeKey)} records={filteredRecords} allRecords={records} query={query} setQuery={setQuery} loading={loading} user={user} config={config} savedViewUsers={bootstrap.users || []} onCreate={openCreate} onEdit={openEdit} onSelect={setSelectedRecord} onAction={openAction} onExport={exportRecords} onPreviewInvoice={previewInvoice} onPreviewOffer={previewOffer} onRefresh={() => loadEntity(activeKey)} /> : <EmptyState title="This section is not available" description="Choose a section from the workspace menu." />}
+        {activeKey === 'overview' ? <Overview config={config} dashboard={dashboard} counts={bootstrap.counts} user={user} canNavigate={canViewSection} onNavigate={changeSection} slaOverview={slaOverview} slaOverviewLoading={slaOverviewLoading} slaOverviewError={slaOverviewError} onRefreshSla={refreshSlaOverview} canViewSlaOverview={canViewSlaOverview} /> : activeKey === 'reports' ? <ReportsPage reports={reports} loading={loading} workforceTargetReport={workforceTargetReport} workforceTargetLoading={workforceTargetLoading} workforceTargetError={workforceTargetError} showWorkforceTargets={canViewWorkforceTargetReport} /> : activeKey === 'settings' ? <Settings config={config} onActivated={async () => { await refreshBootstrap(); await refreshDashboard(); setNotice('Configuration activated') }} /> : entity ? <EntityPage key={`${activeKey}:${user?.id || ''}`} kind={activeKey} meta={entity} label={getTerm(config, activeKey)} records={filteredRecords} allRecords={records} query={query} setQuery={setQuery} loading={loading} user={user} config={config} savedViewUsers={bootstrap.users || []} onCreate={openCreate} onEdit={openEdit} onSelect={setSelectedRecord} onAction={openAction} onExport={exportRecords} onPreviewInvoice={previewInvoice} onPreviewOffer={previewOffer} onRefresh={() => loadEntity(activeKey)} /> : <EmptyState title="This section is not available" description="Choose a section from the workspace menu." />}
       </div>
     </main>
     {userMenu && <button className="platform-dismiss-layer" onClick={() => setUserMenu(false)} aria-label="Close menu" />}
@@ -729,23 +744,25 @@ export default function PlatformApp() {
 
 function ArrowUpRight() { return <ArrowRight size={14} className="platform-link-arrow" /> }
 
-function Overview({ config, dashboard, counts = {}, user, onNavigate, slaOverview, slaOverviewLoading, slaOverviewError, onRefreshSla, canViewSlaOverview }) {
+function Overview({ config, dashboard, counts = {}, user, canNavigate, onNavigate, slaOverview, slaOverviewLoading, slaOverviewError, onRefreshSla, canViewSlaOverview }) {
   const metrics = dashboard?.metrics || dashboard?.summary || dashboard || {}
   const tiles = [
-    ['Open positions', metrics.openJobs ?? metrics.openPositions ?? counts.openJobs ?? 0, BriefcaseBusiness, 'jobs'],
-    ['Active candidates', metrics.activeCandidates ?? metrics.candidates ?? counts.candidates ?? 0, Users, 'candidates'],
-    ['In process', metrics.inProcess ?? metrics.activeApplications ?? counts.applications ?? 0, Activity, 'applications'],
+    [`Open ${getTerm(config, 'jobs').toLowerCase()}`, metrics.openJobs ?? metrics.openPositions ?? counts.openJobs ?? 0, BriefcaseBusiness, 'jobs'],
+    [`Active ${getTerm(config, 'candidates').toLowerCase()}`, metrics.activeCandidates ?? metrics.candidates ?? counts.candidates ?? 0, Users, 'candidates'],
+    [`${getTerm(config, 'applications')} in process`, metrics.inProcess ?? metrics.activeApplications ?? counts.applications ?? 0, Activity, 'applications'],
     ['Needs your attention', metrics.pendingApprovals ?? counts.pendingApprovals ?? 0, ClipboardCheck, 'approvals'],
-  ]
+  ].filter(([, , , route]) => canNavigate(route))
   const activity = dashboard?.recentActivity || dashboard?.activity || dashboard?.recent || []
   const hiring = dashboard?.hiringByDepartment || dashboard?.departmentProgress || []
-  const greeting = user?.name ? `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}` : 'Your hiring at a glance'
-  return <div className="platform-page platform-overview"><div className="platform-page-heading platform-overview-heading"><div><div className="platform-eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</div><h1>{greeting}</h1><p>Here is the latest across {config.company?.name || 'your hiring workspace'}.</p></div><button className="platform-button" onClick={() => onNavigate('requisitions')}><Plus size={16} /> Request a hire</button></div>
+  const hour = regionalHour(config.regional)
+  const greeting = user?.name ? `Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}` : 'Your hiring at a glance'
+  const shortcuts = [[`Review ${getTerm(config, 'applications').toLowerCase()}`,`Move ${getTerm(config, 'candidates').toLowerCase()} through your hiring process`,'applications',FileText],[`Manage open ${getTerm(config, 'jobs').toLowerCase()}`,`Create, publish and track ${getTerm(config, 'jobs').toLowerCase()}`,'jobs',BriefcaseBusiness],['Plan interviews','Coordinate rounds and collect feedback','interviews',CalendarDays],['Review approvals','Keep hiring decisions moving','approvals',CheckCheck]].filter(([, , key]) => canNavigate(key))
+  return <div className="platform-page platform-overview"><div className="platform-page-heading platform-overview-heading"><div><div className="platform-eyebrow">{formatRegionalDate(new Date(), config.regional)}</div><h1>{greeting}</h1><p>Here is the latest across {config.company?.name || 'your hiring workspace'}.</p></div>{canNavigate('requisitions') && <button className="platform-button" onClick={() => onNavigate('requisitions')}><Plus size={16} /> Request a hire</button>}</div>
     <div className="platform-metric-grid">{tiles.map(([label,value,Icon,route], index) => <button className="platform-metric-card" key={label} onClick={() => onNavigate(route)}><div className={`platform-metric-icon metric-${index}`}><Icon size={18} /></div><span>{label}</span><strong>{value}</strong><small>{index === 3 ? 'Pending decisions' : 'Current workspace'}</small><ArrowRight size={15} className="platform-metric-arrow" /></button>)}</div>
     {canViewSlaOverview && <SlaAgingPanel overview={slaOverview} loading={slaOverviewLoading} error={slaOverviewError} onRefresh={onRefreshSla} onNavigate={onNavigate} canViewApplications={hasPermission(user, 'applications', 'view')} />}
-    <div className="platform-overview-grid"><section className="platform-panel platform-shortcuts"><div className="platform-panel-heading"><div><h2>Continue where you left off</h2><p>Common actions for your hiring team</p></div></div><div className="platform-shortcut-list">{[['Review applications','Move candidates through your hiring process','applications',FileText],['Manage open jobs','Create, publish and track roles','jobs',BriefcaseBusiness],['Plan interviews','Coordinate rounds and collect feedback','interviews',CalendarDays],['Review approvals','Keep hiring decisions moving','approvals',CheckCheck]].map(([title,description,key,Icon]) => <button className="platform-shortcut" key={key} onClick={() => onNavigate(key)}><span className="platform-shortcut-icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{description}</small></span><ChevronRight size={16} /></button>)}</div></section>
-      <section className="platform-panel platform-attention"><div className="platform-panel-heading"><div><h2>Hiring pulse</h2><p>Progress across teams</p></div><button className="platform-text-button" onClick={() => onNavigate('workforceTargets')}>View plan <ArrowRight size={14} /></button></div>{hiring.length ? <div className="platform-hiring-list">{hiring.slice(0,5).map((item,index) => { const target = Number(item.target || item.goal || 0); const actual = Number(item.hired || item.actual || 0); return <div className="platform-hiring-item" key={item.department || index}><div><strong>{item.department || item.name || 'Team'}</strong><span>{actual} of {target || '—'} hires</span></div><div className="platform-progress"><span style={{ width: `${target ? Math.min(100, actual / target * 100) : 0}%` }} /></div></div>})}</div> : <EmptyState title="Set your hiring targets" description="Add goals by department and period to track hiring progress here." action={<button className="platform-button platform-button--small" onClick={() => onNavigate('workforceTargets')}>Set targets</button>} />}</section></div>
-    <section className="platform-panel platform-activity-panel"><div className="platform-panel-heading"><div><h2>Recent activity</h2><p>Work happening across your organization</p></div><button className="platform-text-button" onClick={() => onNavigate('audit')}>View audit log <ArrowRight size={14} /></button></div>{activity.length ? <div className="platform-activity-list">{activity.slice(0,6).map((item,index) => <div className="platform-activity-row" key={item.id || index}><span className="platform-activity-dot"><Activity size={13} /></span><span><strong>{item.title || item.action || humanize(item.kind || 'Update')}</strong><small>{item.description || item.actor || item.user || 'Workspace activity'}</small></span><time>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : item.time || ''}</time></div>)}</div> : <EmptyState title="No recent activity yet" description="As your team reviews candidates and updates jobs, activity will appear here." />}</section>
+    <div className="platform-overview-grid">{shortcuts.length > 0 && <section className="platform-panel platform-shortcuts"><div className="platform-panel-heading"><div><h2>Continue where you left off</h2><p>Common actions for your hiring team</p></div></div><div className="platform-shortcut-list">{shortcuts.map(([title,description,key,Icon]) => <button className="platform-shortcut" key={key} onClick={() => onNavigate(key)}><span className="platform-shortcut-icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{description}</small></span><ChevronRight size={16} /></button>)}</div></section>}
+      {canNavigate('workforceTargets') && <section className="platform-panel platform-attention"><div className="platform-panel-heading"><div><h2>Hiring pulse</h2><p>Progress across teams</p></div><button className="platform-text-button" onClick={() => onNavigate('workforceTargets')}>View plan <ArrowRight size={14} /></button></div>{hiring.length ? <div className="platform-hiring-list">{hiring.slice(0,5).map((item,index) => { const target = Number(item.target || item.goal || 0); const actual = Number(item.hired || item.actual || 0); return <div className="platform-hiring-item" key={item.department || index}><div><strong>{item.department || item.name || 'Team'}</strong><span>{actual} of {target || '—'} hires</span></div><div className="platform-progress"><span style={{ width: `${target ? Math.min(100, actual / target * 100) : 0}%` }} /></div></div>})}</div> : <EmptyState title="Set your hiring targets" description="Add goals by department and period to track hiring progress here." action={<button className="platform-button platform-button--small" onClick={() => onNavigate('workforceTargets')}>Set targets</button>} />}</section>}</div>
+    <section className="platform-panel platform-activity-panel"><div className="platform-panel-heading"><div><h2>Recent activity</h2><p>Work happening across your organization</p></div>{canNavigate('audit') && <button className="platform-text-button" onClick={() => onNavigate('audit')}>View audit log <ArrowRight size={14} /></button>}</div>{activity.length ? <div className="platform-activity-list">{activity.slice(0,6).map((item,index) => <div className="platform-activity-row" key={item.id || index}><span className="platform-activity-dot"><Activity size={13} /></span><span><strong>{item.title || item.action || humanize(item.kind || 'Update')}</strong><small>{item.description || item.actor || item.user || 'Workspace activity'}</small></span><time>{item.createdAt ? formatRegionalDate(item.createdAt, config.regional) : item.time || ''}</time></div>)}</div> : <EmptyState title="No recent activity yet" description={`As your team reviews ${getTerm(config, 'candidates').toLowerCase()} and updates ${getTerm(config, 'jobs').toLowerCase()}, activity will appear here.`} />}</section>
   </div>
 }
 

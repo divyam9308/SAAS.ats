@@ -89,7 +89,7 @@ function insertSeedRecord(db, companyId, kind, record) {
   return data;
 }
 
-function seedCompany(db, companyId, config) {
+function seedCompany(db, companyId, config, { seedDemo = true } = {}) {
   const exists = db.prepare('SELECT 1 FROM platform_config WHERE company_id=?').get(companyId);
   if (exists) return;
   const timestamp = now();
@@ -108,6 +108,7 @@ function seedCompany(db, companyId, config) {
     return { ...user, role: user.roleId, roleName: role?.name || user.roleId, department: unit?.name || user.departmentId || '', location: location?.name || user.locationId || '' };
   });
   for (const user of users) db.prepare('INSERT INTO platform_users(company_id,id,data) VALUES(?,?,?)').run(companyId, user.id, JSON.stringify(user));
+  if (!seedDemo) return;
   const consultantRole = configuredRoles.find(role => /agency|consultant/i.test(`${role.id} ${role.name}`));
   if ((config?.mode === 'agency' || config?.modules?.agency) && consultantRole && !users.some(user => user.roleId === consultantRole.id)) {
     const consultant = { id: 'demo-consultant', name: 'Avery Kim', email: 'consultant@localhost.test', roleId: consultantRole.id, role: consultantRole.id, roleName: consultantRole.name, department: 'Recruitment', location: locations[0]?.name || '' };

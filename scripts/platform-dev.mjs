@@ -8,10 +8,10 @@ const baseEnv = {
   NODE_ENV: 'development',
   PLATFORM_MODE: 'true',
   LOCAL_DEMO_MODE: 'true',
-  ATS_PLATFORM_DB: resolve(root, 'server/data/platform-local.sqlite'),
-  ATS_PLATFORM_DATA_DIR: resolve(root, 'server/data/platform-documents'),
+  ATS_PLATFORM_DB: process.env.ATS_PLATFORM_DB || resolve(root, 'server/data/platform-local.sqlite'),
+  ATS_PLATFORM_DATA_DIR: process.env.ATS_PLATFORM_DATA_DIR || resolve(root, 'server/data/platform-documents'),
   PORT: process.env.PORT || '4000',
-  FRONTEND_URL: 'http://127.0.0.1:5173',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://127.0.0.1:5173',
   VITE_PLATFORM_MODE: 'true',
   VITE_BUILDER_AVAILABLE: 'true',
 }

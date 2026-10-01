@@ -6,12 +6,12 @@ const path = require('node:path');
 const express = require('../server/node_modules/express');
 const { defaults } = require('../shared/ats-config.cjs');
 
-async function instance(t, preset = 'corporate', customize = () => {}) {
+async function instance(t, preset = 'corporate', customize = () => {}, routerOptions = {}) {
   const initialConfig = defaults(preset);
   customize(initialConfig);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-acceptance-'));
   const { createPlatformRouter } = require('../server/src/platform');
-  const router = createPlatformRouter({ initialConfig, dbPath: path.join(dir, 'ats.sqlite'), dataDir: dir });
+  const router = createPlatformRouter({ initialConfig, dbPath: path.join(dir, 'ats.sqlite'), dataDir: dir, ...routerOptions });
   const app = express();
   app.use(express.json());
   app.use('/api/platform', router);
@@ -53,6 +53,24 @@ test('platform router leaves interview reminders disabled by default in acceptan
   const notifications = await request('/records/notifications');
   assert.equal(notifications.status, 200, JSON.stringify(notifications.payload));
   assert.equal(notifications.data.some(row => row.kind === 'interview_reminder'), false);
+});
+
+test('production auth boundary fails closed when no real adapter is configured', async t => {
+  const { request } = await instance(t, 'corporate', () => {}, { demoAuthEnabled: false });
+  const response = await request('/bootstrap');
+  assert.equal(response.status, 503);
+  assert.equal(response.payload.error, 'Production authentication adapter is not configured');
+});
+
+test('public application endpoint rate limits repeated submissions by address', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.security = { ...(config.security || {}), publicApplicationLimit: 1 };
+  });
+  const job = (await request('/public/jobs', { user: 'public' })).data[0];
+  const body = { data: { fullName: 'Rate Limited Applicant', email: 'rate-limit@example.test', consent: true, resume: { filename: 'resume.txt', contentBase64: Buffer.from('Resume').toString('base64') } } };
+  assert.equal((await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body })).status, 201);
+  const blocked = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body });
+  assert.equal(blocked.status, 429);
 });
 
 test('interview schedule writes validate calendar policy, prevent participant and room overlaps, and keep mock event history', async t => {

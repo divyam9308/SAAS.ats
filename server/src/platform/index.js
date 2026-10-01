@@ -29,6 +29,7 @@ const { normalizeSource, configuredSource } = require('./source-options');
 const { createInterviewReminderScheduler } = require('./local-scheduler');
 const { InterviewCalendarError, validateInterviewSchedule, findInterviewConflict, createMockCalendarEvent, transitionMockCalendarEvent } = require('./interview-calendar');
 const { activateConfiguration, syncConfiguredUsers } = require('./config-lifecycle');
+const { inspectDocument, localDocumentScanner } = require('./document-security');
 
 const COMPANY = 'local-company';
 const send = (res, data, status = 200) => res.status(status).json({ data });
@@ -74,16 +75,18 @@ function automationActionAuthorization(action = {}, targetKind) {
   throw new WorkflowError(`Unsupported automation action “${type || 'unspecified'}”.`, 422);
 }
 
-function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'server', 'data', 'documents'), initialConfig, schedulerEnabled = false, schedulerIntervalMs } = {}) {
+function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'server', 'data', 'documents'), initialConfig, seedDemo = true, documentScanner, demoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.LOCAL_DEMO_MODE === 'true', schedulerEnabled = false, schedulerIntervalMs } = {}) {
   const router = express.Router();
   const db = openDatabase(dbPath);
   const configInput = initialConfig || require('../../../shared/ats-config.cjs').defaults('corporate');
-  seedCompany(db, COMPANY, configInput);
+  seedCompany(db, COMPANY, configInput, { seedDemo });
   const store = createStore(db, COMPANY);
   fs.mkdirSync(dataDir, { recursive: true });
   const cfgRow = () => db.prepare('SELECT active,draft,active_version FROM platform_config WHERE company_id=?').get(COMPANY);
   const config = () => parseJson(cfgRow().active, {});
   const users = () => db.prepare('SELECT data FROM platform_users WHERE company_id=?').all(COMPANY).map(r => parseJson(r.data));
+  const scanDocument = documentScanner || (process.env.NODE_ENV === 'production' ? null : localDocumentScanner);
+  const publicApplicationAttempts = new Map();
   const audit = (actor, event, kind, recordId, details = {}) => {
     const createdAt = now();
     db.prepare('INSERT INTO platform_audit(company_id,actor_id,action,kind,record_id,details,created_at) VALUES(?,?,?,?,?,?,?)').run(COMPANY, actor, event, kind || null, recordId || null, JSON.stringify(details), createdAt);
@@ -94,6 +97,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   reminderScheduler.start();
   router.close = () => { if (closed) return; closed = true; reminderScheduler.stop(); db.close(); };
   const auth = (req, res, next) => {
+    if (!demoAuthEnabled) return fail(res, 503, 'Production authentication adapter is not configured');
     const user = users().find(u => u.id === (req.get('x-demo-user') || 'demo-admin'));
     if (!user) return fail(res, 401, 'Unknown local demo user');
     req.actor = user; req.config = config(); next();
@@ -1118,8 +1122,17 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   router.get('/public/jobs', (req, res) => send(res, store.list('jobs').filter(j => j.status === 'open' && j.visibility === 'public' && moduleEnabled(config(), 'careers')).map(j => publicJob(j, config()))));
   router.get('/public/jobs/:id', (req, res) => { const job = store.get('jobs', req.params.id); if (!job || job.status !== 'open' || job.visibility !== 'public' || !moduleEnabled(config(), 'careers')) return fail(res, 404, 'Job not found'); send(res, publicJob(job, config())); });
   router.post('/public/jobs/:id/apply', (req, res) => {
+    const timestamp = Date.now();
+    const windowMs = 15 * 60 * 1000;
+    const limit = Math.max(1, Number(config().security?.publicApplicationLimit) || 20);
+    const key = String(req.ip || req.socket?.remoteAddress || 'unknown');
+    const recent = (publicApplicationAttempts.get(key) || []).filter(value => timestamp - value < windowMs);
+    if (recent.length >= limit) return fail(res, 429, 'Too many applications; please try again later');
+    recent.push(timestamp); publicApplicationAttempts.set(key, recent);
+    if (publicApplicationAttempts.size > 1000) for (const [candidate, attempts] of publicApplicationAttempts) if (!attempts.some(value => timestamp - value < windowMs)) publicApplicationAttempts.delete(candidate);
     const job = store.get('jobs', req.params.id); if (!job || job.status !== 'open' || job.visibility !== 'public' || !moduleEnabled(config(), 'careers')) return fail(res, 404, 'Job not found');
     const data = { ...(req.body?.data || {}) }; const cfg = config();
+    if (data._contactWebsite) return send(res, { status: 'received' }, 201);
     const careerSource = configuredSource(cfg, 'careers-site');
     if (Array.isArray(cfg.sources) && !careerSource) return fail(res, 403, 'Careers site applications are disabled as a candidate source');
     const careerSourceLabel = careerSource?.label || 'Careers site';
@@ -1165,7 +1178,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       db.exec('BEGIN IMMEDIATE'); transactionOpen = true;
       candidate = store.put('candidates', { name: prepared.candidateDetails.name, email: prepared.candidateDetails.email, phone: prepared.candidateDetails.phone, consentStatus: data.consent ? 'granted' : 'pending', source: careerSourceLabel, ownerId: null }, 'public');
       const app = store.put('applications', { candidateId: candidate.id, jobId: job.id, stage: pipeline?.stages?.[0]?.id || pipeline?.stages?.[0]?.name || 'applied', status: 'active', source: careerSourceLabel, pipelineId: pipeline?.id, ownerId: job.recruiterId || null, answers: cleanAnswers }, 'public');
-      if (applicationUpload) document = attachDocument(store, applicationUpload, { candidateId: candidate.id, applicationId: app.id }, dataDir, 'public', cfg);
+      if (applicationUpload) document = attachDocument(store, applicationUpload, { candidateId: candidate.id, applicationId: app.id }, dataDir, 'public', cfg, scanDocument);
       audit('public', 'application.submitted', 'applications', app.id, { jobId: job.id });
       emitEvent({ config: cfg, actor: { id: 'public' }, localsUsers: users(), localsAudit: audit }, store, 'application.created', { ...app, __kind: 'applications' });
       db.exec('COMMIT'); transactionOpen = false;
@@ -1240,7 +1253,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   router.post('/records/:kind/:id/documents', (req, res) => {
     const { kind, id } = req.params; if (!permitted(req, res, 'documents', 'create')) return;
     const record = store.get(kind, id); if (!record || !readable(req, record, kind)) return fail(res, 404, 'Record not found');
-    try { const doc = attachDocument(store, req.body?.data || {}, { relatedKind: kind, relatedId: id }, dataDir, req.actor.id, req.config); audit(req.actor.id, 'document.uploaded', kind, id, { documentId: doc.id, version: doc.version, replacesDocumentId: doc.previousVersionId || null }); send(res, masked(req, doc), 201); } catch (e) { fail(res, e.status || 422, e.message); }
+    try { const doc = attachDocument(store, req.body?.data || {}, { relatedKind: kind, relatedId: id }, dataDir, req.actor.id, req.config, scanDocument); audit(req.actor.id, 'document.uploaded', kind, id, { documentId: doc.id, version: doc.version, replacesDocumentId: doc.previousVersionId || null }); send(res, masked(req, doc), 201); } catch (e) { fail(res, e.status || 422, e.message); }
   });
   router.get('/documents/:id/versions', (req, res) => {
     if (!permitted(req, res, 'documents', 'view')) return;
@@ -1272,7 +1285,11 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     if (!parentAllowed || !visibilityAllowed) return fail(res, 404, 'Document not found');
     const file = path.join(dataDir, path.basename(doc.storageName || ''));
     if (!doc.storageName || !fs.existsSync(file)) return fail(res, 404, 'Document file is missing');
-    res.type(doc.mimeType || 'application/octet-stream').send(fs.readFileSync(file));
+    const safeFilename = path.basename(doc.filename || 'document').replace(/[\r\n"]/g, '_');
+    res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(fs.readFileSync(file));
   });
 
   // Workforce targets are computed from persisted goals and dated outcomes.
@@ -1430,7 +1447,28 @@ function publicJob(job, config) {
   const customFields = Object.fromEntries(Object.entries(job.customFields || {}).filter(([key]) => allowedFields.has(key)));
   if (Object.keys(customFields).length) visible.customFields = customFields;
   const form = (config.applicationForms || []).find(f => f.id === job.applicationFormId) || config.applicationForms?.[0] || null;
-  return { ...visible, company: config.company, branding: { productName: config.branding?.productName, logo: config.branding?.careersLogo || config.branding?.logo, primaryColor: config.branding?.primaryColor }, privacyNotice: config.privacy?.notice || '', applicationForm: form, applicationConditions: form?.conditions || [], knockoutQuestions: form?.knockoutQuestions || [] };
+  const branding = config.branding || {};
+  return {
+    ...visible,
+    company: { name: config.company?.name, website: config.company?.website },
+    branding: {
+      productName: branding.productName,
+      logo: branding.careersLogo || branding.logo,
+      primaryColor: branding.primaryColor,
+      accentColor: branding.accentColor,
+      colorMode: branding.colorMode,
+      darkPrimaryColor: branding.darkPrimaryColor,
+      darkBackgroundColor: branding.darkBackgroundColor,
+      typography: branding.typography,
+      fontFamily: branding.fontFamily,
+      favicon: branding.favicon,
+      loginSubheading: branding.loginSubheading,
+    },
+    careers: { headline: config.careers?.headline, intro: config.careers?.intro, footer: config.careers?.footer },
+    terminology: { jobs: config.terminology?.jobs, candidates: config.terminology?.candidates },
+    regional: { locale: config.regional?.locale, timezone: config.regional?.timezone, dateFormat: config.regional?.dateFormat, timeFormat: config.regional?.timeFormat },
+    privacyNotice: config.privacy?.notice || '', applicationForm: form, applicationConditions: form?.conditions || [], knockoutQuestions: form?.knockoutQuestions || []
+  };
 }
 function referralResponse(referral) {
   const result = {};
@@ -1483,18 +1521,21 @@ function knockoutTriggered(question, answers) {
   if (rejected !== undefined) return Array.isArray(rejected) ? rejected.includes(value) : value === rejected;
   return question.required === true && (value === undefined || value === null || value === '');
 }
-function attachDocument(store, input, relations, dataDir, actorId, config = {}) {
+function attachDocument(store, input, relations, dataDir, actorId, config = {}, scanDocument) {
   if (!input.filename || !input.contentBase64) throw new Error('Filename and base64 file content are required');
-  const bytes = Buffer.from(input.contentBase64, 'base64'); if (!bytes.length) throw new Error('Document content is empty');
-  if (bytes.length > (Number(config.documents?.maxFileSizeMb) || 20) * 1024 * 1024) throw new Error(`Document exceeds ${Number(config.documents?.maxFileSizeMb) || 20} MB`);
-  const id = uid('document'), filename = path.basename(input.filename), storageName = `${id}${path.extname(filename).slice(0, 12)}`;
+  const inspected = inspectDocument({ ...input, maxFileSizeMb: config.documents?.maxFileSizeMb });
+  if (!scanDocument) { const error = new Error('Document malware scanner is required in production'); error.status = 503; throw error; }
+  const scan = scanDocument({ bytes: inspected.bytes, filename: inspected.filename, mimeType: inspected.mimeType });
+  if (!scan || scan.clean !== true) { const error = new Error(scan?.reason || 'Document failed malware screening'); error.status = 422; throw error; }
+  const { bytes, filename, mimeType } = inspected;
+  const id = uid('document'), storageName = `${id}${path.extname(filename).slice(0, 12)}`;
   const prepared = dataAdmin.prepareDocumentVersion(store, { ...input, ...relations, id, filename }, { config, actor: actorId });
   // File bytes belong in local document storage, not in the SQLite metadata row.
   // Keeping the submitted base64 here would duplicate sensitive attachments and
   // make metadata exports unexpectedly contain the complete document body.
   delete prepared.contentBase64;
   fs.writeFileSync(path.join(dataDir, storageName), bytes, { flag: 'wx' });
-  try { return store.put('documents', { ...prepared, ...relations, id, filename, storageName, mimeType: input.mimeType || 'application/octet-stream', size: bytes.length, ownerId: actorId }, actorId); }
+  try { return store.put('documents', { ...prepared, ...relations, id, filename, storageName, mimeType, size: bytes.length, scanProvider: scan.provider || 'configured', scannedAt: now(), ownerId: actorId }, actorId); }
   catch (error) { fs.rmSync(path.join(dataDir, storageName), { force: true }); throw error; }
 }
 function enqueue(req, store, kind, event, record) { emitEvent(req, store, `${kind}.${event}`, { ...record, __kind: kind }); }

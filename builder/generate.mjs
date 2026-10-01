@@ -13,6 +13,7 @@ const { openDatabase, createStore, seedCompany, now } = require('../server/src/p
 const { activateConfiguration } = require('../server/src/platform/config-lifecycle.js')
 const json = value => JSON.stringify(value, null, 2) + '\n'
 const execFileAsync = promisify(execFile)
+const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const WORKSPACE_ENTRIES = ['eslint.config.js', 'index.html', 'public', 'server', 'src', 'vite.config.js']
 const SERVER_PACKAGE = {
   name: 'generated-ats-platform-server', version: '1.0.0', private: true, main: 'server.js',
@@ -36,18 +37,22 @@ const cors = require('cors')
 const fs = require('node:fs')
 const path = require('node:path')
 const app = express()
+app.disable('x-powered-by')
+app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()'); res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'; object-src 'none'"); next() })
 const allowed = [/^http:\\/\\/(?:127\\.0\\.0\\.1|localhost)(?::\\d+)?$/]
 app.use(cors({ origin(origin, callback) { if (!origin || allowed.some(rule => rule.test(origin))) return callback(null, true); callback(new Error('Not allowed by CORS'), false) }, credentials: true }))
-app.use(express.json({ limit: '12mb' }))
+const maximumUploadMb = Math.max(1, Number(process.env.ATS_MAX_UPLOAD_MB) || 20)
+app.use(express.json({ limit: Math.ceil(maximumUploadMb * 1024 * 1024 * 4 / 3) + 1024 * 1024 }))
 const resolveSetting = (value, fallback) => path.isAbsolute(value || '') ? value : path.resolve(__dirname, '..', '..', value || fallback)
 const configFile = resolveSetting(process.env.ATS_PLATFORM_CONFIG, 'config/platform.config.json')
 const config = JSON.parse(fs.readFileSync(configFile, 'utf8'))
 const { createPlatformRouter } = require('./platform')
-const router = createPlatformRouter({ initialConfig: config, dbPath: resolveSetting(process.env.ATS_PLATFORM_DB, 'server/data/platform.sqlite'), dataDir: resolveSetting(process.env.ATS_PLATFORM_DATA_DIR, 'server/data/documents'), schedulerEnabled: process.env.NODE_ENV !== 'test' && process.env.PLATFORM_REMINDERS !== 'false' })
+const router = createPlatformRouter({ initialConfig: config, seedDemo: process.env.ATS_PLATFORM_SEED_DEMO === 'true', dbPath: resolveSetting(process.env.ATS_PLATFORM_DB, 'server/data/platform.sqlite'), dataDir: resolveSetting(process.env.ATS_PLATFORM_DATA_DIR, 'server/data/documents'), schedulerEnabled: process.env.NODE_ENV !== 'test' && process.env.PLATFORM_REMINDERS !== 'false' })
 app.locals.platformClose = () => router.close?.()
 app.use('/api/platform', router)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', mode: 'platform-local', company: config.company.slug }))
 app.use('/api', (req, res) => res.status(404).json({ error: 'This API is not part of the local platform runtime.' }))
+app.use((error, req, res, next) => { if (res.headersSent) return next(error); if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'Request exceeds the configured ' + maximumUploadMb + ' MB upload limit' }); return res.status(error?.message === 'Not allowed by CORS' ? 403 : 500).json({ error: error?.message === 'Not allowed by CORS' ? 'Origin is not allowed' : 'Request failed' }) })
 module.exports = app
 `
 }
@@ -69,7 +74,7 @@ function runner() {
   return `import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 const root = process.cwd()
-const env = { ...process.env, NODE_ENV: 'development', PLATFORM_MODE: 'true', VITE_PLATFORM_MODE: 'true', VITE_BUILDER_AVAILABLE: 'false', PORT: process.env.PORT || '4000', ATS_PLATFORM_CONFIG: resolve('config/platform.config.json'), ATS_PLATFORM_DB: resolve('server/data/platform.sqlite'), ATS_PLATFORM_DATA_DIR: resolve('server/data/documents') }
+const env = { ...process.env, NODE_ENV: 'development', PLATFORM_MODE: 'true', VITE_PLATFORM_MODE: 'true', VITE_BUILDER_AVAILABLE: 'false', PORT: process.env.PORT || '4000', ATS_PLATFORM_CONFIG: process.env.ATS_PLATFORM_CONFIG || resolve('config/platform.config.json'), ATS_PLATFORM_DB: process.env.ATS_PLATFORM_DB || resolve('server/data/platform.sqlite'), ATS_PLATFORM_DATA_DIR: process.env.ATS_PLATFORM_DATA_DIR || resolve('server/data/documents'), ATS_PLATFORM_SEED_DEMO: process.env.ATS_PLATFORM_SEED_DEMO || 'false' }
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const children = [spawn(process.execPath, [resolve('server/server.js')], { cwd: root, env, stdio: 'inherit' }), spawn(npm, ['run', 'dev', '--', '--host', '127.0.0.1'], { cwd: root, env, stdio: 'inherit' })]
 let stopping = false
@@ -81,7 +86,7 @@ console.log('Platform workspace: http://127.0.0.1:5173/platform')
 }
 
 function serverEnv(config) {
-  return `PORT=4000\nNODE_ENV=development\nPLATFORM_MODE=true\nATS_PLATFORM_CONFIG=config/platform.config.json\nATS_PLATFORM_DB=server/data/platform.sqlite\nATS_PLATFORM_DATA_DIR=server/data/documents\nCOMPANY_TIME_ZONE=${config.regional?.timezone || 'UTC'}\n`
+  return `PORT=4000\nNODE_ENV=development\nPLATFORM_MODE=true\nLOCAL_DEMO_MODE=true\nATS_PLATFORM_CONFIG=config/platform.config.json\nATS_PLATFORM_DB=server/data/platform.sqlite\nATS_PLATFORM_DATA_DIR=server/data/documents\nATS_PLATFORM_SEED_DEMO=false\nATS_MAX_UPLOAD_MB=${Number(config.documents?.maxFileSizeMb) || 20}\nCOMPANY_TIME_ZONE=${config.regional?.timezone || 'UTC'}\n`
 }
 
 async function copySource(destination) {
@@ -136,9 +141,11 @@ async function writeStandaloneWorkspace(config, workspaceDirectory) {
   rootPackage.private = true
   rootPackage.engines = { node: '>=22.5' }
   rootPackage.dependencies = Object.fromEntries(Object.entries(rootPackage.dependencies).filter(([name]) => !['@supabase/supabase-js', '@vercel/speed-insights', 'recharts'].includes(name)))
-  rootPackage.scripts = { setup: 'npm install && npm --prefix server install', local: 'node scripts/platform-dev.mjs', dev: 'vite', build: 'vite build', test: 'node --test tests/platform.acceptance.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js', lint: 'eslint src/platform' }
+  rootPackage.scripts = { setup: 'npm ci && npm --prefix server ci', local: 'node scripts/platform-dev.mjs', dev: 'vite', build: 'vite build', test: 'node --test tests/platform.acceptance.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js', lint: 'eslint src/platform' }
   await writeFile(join(workspaceDirectory, 'package.json'), json(rootPackage))
-  await writeFile(join(workspaceDirectory, '.gitignore'), 'node_modules\ndist\n.env.local\nserver/node_modules\nserver/data/*\n*.log\n')
+  await writeFile(join(workspaceDirectory, '.gitignore'), 'node_modules\ndist\n.env\n.env.*\n!.env.example\nserver/node_modules\nserver/.env\nserver/.env.*\n!server/.env.example\nserver/data/*\n*.log\n')
+  await execFileAsync(npmExecutable, ['install', '--package-lock-only', '--ignore-scripts', '--offline'], { cwd: workspaceDirectory })
+  await execFileAsync(npmExecutable, ['install', '--package-lock-only', '--ignore-scripts', '--offline'], { cwd: join(workspaceDirectory, 'server') })
   await writeFile(join(workspaceDirectory, 'LOCAL_SETUP.md'), `# ${config.branding?.productName || config.company.name}\n\nA standalone local ATS platform workspace using its own schemaV2 configuration and SQLite database.\n\nPrerequisite: Node.js 22.5 or newer and npm.\n\n\`\`\`sh\nnpm run setup\nnpm run local\n\`\`\`\n\nOpen http://127.0.0.1:5173/platform. The API listens on http://127.0.0.1:4000/api/platform. The first launch seeds an independent database from \`config/platform.config.json\`.\n`)
 }
 
@@ -153,14 +160,38 @@ export async function generateCompanyPackage(inputConfig) {
   const workspaceDirectory = join(stagingDirectory, 'workspace')
   await mkdir(workspaceDirectory, { recursive: true })
   await writeStandaloneWorkspace(config, workspaceDirectory)
+  const existingData = join(outputDirectory, 'workspace', 'server', 'data')
+  if (await exists(existingData)) {
+    await cp(existingData, join(workspaceDirectory, 'server', 'data'), { recursive: true, force: true })
+  }
   await mkdir(join(root, 'configs'), { recursive: true })
   await writeFile(join(root, 'configs', `${slug}.json`), json(config))
-  await rm(outputDirectory, { recursive: true, force: true })
-  await rename(stagingDirectory, outputDirectory)
   const archiveFile = join(root, 'generated', `${slug}-ats-platform.tar.gz`)
-  await rm(archiveFile, { force: true })
-  await execFileAsync('tar', ['-czf', archiveFile, '-C', outputDirectory, 'workspace'])
-  return { slug, outputDirectory, workspaceDirectory: join(outputDirectory, 'workspace'), archiveFile, configFile: join(root, 'configs', `${slug}.json`), activated: false }
+  const stagedArchive = join(root, 'generated', `.${slug}-${process.pid}-${Date.now()}.tar.gz`)
+  await execFileAsync('tar', ['-czf', stagedArchive, '-C', stagingDirectory, 'workspace'])
+  let backupDirectory = null
+  let previousArchive = null
+  try {
+    if (await exists(outputDirectory)) {
+      const backupRoot = join(root, 'generated', '.backups')
+      await mkdir(backupRoot, { recursive: true })
+      backupDirectory = join(backupRoot, `${slug}-${new Date().toISOString().replace(/[:.]/g, '-')}`)
+      await rename(outputDirectory, backupDirectory)
+      if (await exists(archiveFile)) {
+        previousArchive = join(backupDirectory, 'previous-package.tar.gz')
+        await rename(archiveFile, previousArchive)
+      }
+    }
+    await rename(stagingDirectory, outputDirectory)
+    await rename(stagedArchive, archiveFile)
+  } catch (error) {
+    await rm(outputDirectory, { recursive: true, force: true })
+    if (previousArchive && await exists(previousArchive)) await rename(previousArchive, archiveFile)
+    if (backupDirectory && await exists(backupDirectory)) await rename(backupDirectory, outputDirectory)
+    await rm(stagedArchive, { force: true })
+    throw error
+  }
+  return { slug, outputDirectory, workspaceDirectory: join(outputDirectory, 'workspace'), archiveFile, backupDirectory, configFile: join(root, 'configs', `${slug}.json`), activated: false }
 }
 
 export async function applyCompanyConfig(inputConfig) {

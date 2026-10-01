@@ -143,3 +143,33 @@ test('Apply activates the factory runtime configuration without touching a real 
   assert.equal(bootstrap.data.config.branding.productName, 'Applied Factory ATS')
   assert.equal(bootstrap.data.config.mode, 'startup')
 })
+
+test('regeneration preserves buyer data, creates a rollback backup, and emits reproducible installs', async t => {
+  const { generateCompanyPackage } = await import('./generate.mjs')
+  const config = defaults('startup')
+  const slug = `builder-regeneration-${process.pid}`
+  config.company.name = 'Builder Regeneration Safety'
+  config.company.slug = slug
+  const generatedRoot = resolve(__dirname, '..', 'generated')
+  const outputDirectory = join(generatedRoot, slug)
+  const archiveFile = join(generatedRoot, `${slug}-ats-platform.tar.gz`)
+  const configFile = resolve(__dirname, '..', 'configs', `${slug}.json`)
+  const cleanup = new Set([outputDirectory, archiveFile, configFile])
+  t.after(() => { for (const target of cleanup) fs.rmSync(target, { recursive: true, force: true }) })
+
+  const first = await generateCompanyPackage(config)
+  assert.equal(first.backupDirectory, null)
+  assert.equal(fs.existsSync(join(first.workspaceDirectory, 'package-lock.json')), true)
+  assert.equal(fs.existsSync(join(first.workspaceDirectory, 'server', 'package-lock.json')), true)
+  const generatedPackage = JSON.parse(fs.readFileSync(join(first.workspaceDirectory, 'package.json'), 'utf8'))
+  assert.equal(generatedPackage.scripts.setup, 'npm ci && npm --prefix server ci')
+
+  const dataDirectory = join(first.workspaceDirectory, 'server', 'data')
+  fs.mkdirSync(dataDirectory, { recursive: true })
+  fs.writeFileSync(join(dataDirectory, 'buyer-data.txt'), 'must survive regeneration')
+  config.company.name = 'Builder Regeneration Safety Updated'
+  const second = await generateCompanyPackage(config)
+  cleanup.add(second.backupDirectory)
+  assert.equal(fs.readFileSync(join(second.workspaceDirectory, 'server', 'data', 'buyer-data.txt'), 'utf8'), 'must survive regeneration')
+  assert.equal(fs.existsSync(join(second.backupDirectory, 'workspace', 'server', 'data', 'buyer-data.txt')), true)
+})

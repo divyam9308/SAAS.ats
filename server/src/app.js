@@ -1,11 +1,32 @@
 const express = require('express')
 const cors = require('cors')
+const crypto = require('node:crypto')
 const platformMode = process.env.PLATFORM_MODE === 'true'
 const { companyConfig, moduleEnabled } = platformMode
   ? { companyConfig: null, moduleEnabled: () => false }
   : require('./config/companyConfig')
 
 const app = express()
+app.disable('x-powered-by')
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'; object-src 'none'")
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  next()
+})
+
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'production' && process.env.ATS_STRUCTURED_LOGS !== 'true') return next()
+  const requestId = req.get('x-request-id') || crypto.randomUUID()
+  const startedAt = process.hrtime.bigint()
+  res.setHeader('x-request-id', requestId)
+  res.on('finish', () => console.info(JSON.stringify({ type: 'http_request', requestId, method: req.method, path: req.path, status: res.statusCode, durationMs: Number((Number(process.hrtime.bigint() - startedAt) / 1e6).toFixed(1)) })))
+  next()
+})
 
 const PERF_ROUTES = /^\/api\/(candidates|clients|jobs|dashboard|notifications|invoice|admin|performance|presence|reports)(?:\/|$)/
 
@@ -44,7 +65,9 @@ app.use(cors({
   credentials: true
 }))
 
-app.use(express.json())
+const maximumUploadMb = Math.max(1, Number(process.env.ATS_MAX_UPLOAD_MB) || 20)
+const jsonBodyLimitBytes = Math.ceil(maximumUploadMb * 1024 * 1024 * 4 / 3) + 1024 * 1024
+app.use(express.json({ limit: jsonBodyLimitBytes }))
 if (platformMode) {
   const { createPlatformRouter } = require('./platform')
   const platformRouter = createPlatformRouter({ schedulerEnabled: process.env.NODE_ENV !== 'test' && process.env.PLATFORM_REMINDERS !== 'false' })
@@ -89,5 +112,13 @@ secureModule('/api/ai', 'aiParsing', require('./routes/ai'))
 }
 
 if (!platformMode) app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error)
+  if (error?.type === 'entity.too.large') return res.status(413).json({ error: `Request exceeds the configured ${maximumUploadMb} MB upload limit` })
+  if (error?.message === 'Not allowed by CORS') return res.status(403).json({ error: 'Origin is not allowed' })
+  console.error(JSON.stringify({ type: 'request_error', requestId: res.getHeader('x-request-id') || null, method: req.method, path: req.path, message: error?.message || 'Unknown request error' }))
+  return res.status(500).json({ error: 'Request failed' })
+})
 
 module.exports = app

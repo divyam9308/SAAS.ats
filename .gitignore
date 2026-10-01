@@ -25,7 +25,8 @@ server/.env.*
 /upload/
 /output/
 /outputs/
-!generated/**/.env.example
+/generated/
+/configs/*.json
 
 # Editor directories and files
 .vscode/*
