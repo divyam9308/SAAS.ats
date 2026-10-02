@@ -20,6 +20,7 @@ const baseConfig = {
     customDomain: '', colorMode: 'light', darkPrimaryColor: '#93A8FF', darkBackgroundColor: '#101522'
   },
   terminology: { jobs: 'Jobs', candidates: 'Candidates', recruiters: 'Recruiters', clients: 'Clients', hires: 'Hires' },
+  careers: { headline: '', intro: '', footer: '', copy: { eyebrow: '', brandSubheading: '', searchPlaceholder: '', noMatchesTitle: '', noMatchesDescription: '', apply: '', applicationIntro: '', submit: '', submitting: '', receivedTitle: '', receivedDescription: '', poweredBy: '', privacyFooter: '' } },
   regional: { currency: 'USD', timezone: 'America/New_York', dateFormat: 'MM/DD/YYYY', timeFormat: '12h', language: 'en', workingDays: [1, 2, 3, 4, 5], workingHours: { start: '09:00', end: '17:00' }, salaryUnit: 'year', noticePeriodUnit: 'days', numberLocale: 'en-US' },
   modules: { dashboard: true, candidates: true, jobs: true, requisitions: true, applications: true, interviews: true, offers: true, onboarding: true, careers: true, referrals: false, talentCrm: true, reporting: true, automation: false, agency: false, invoices: false, workforcePlanning: false, audit: true, tasks: true, notifications: true, integrations: true },
   organization: {

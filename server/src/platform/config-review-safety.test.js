@@ -1,0 +1,51 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { defaults } = require('../../../shared/ats-config.cjs');
+const { openDatabase, seedCompany } = require('./database');
+const { activateConfiguration } = require('./config-lifecycle');
+const express = require('express');
+const { createPlatformRouter } = require('./index');
+
+test('configuration review validates without persisting and denies unauthorized users', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-review-api-'));
+  const config = defaults('corporate');
+  const router = createPlatformRouter({ dbPath: path.join(dir, 'ats.sqlite'), dataDir: path.join(dir, 'documents'), initialConfig: config, seedDemo: false });
+  const app = express(); app.use(express.json()); app.use('/api/platform', router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); router.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const request = (route, data, user = 'demo-admin') => fetch(`http://127.0.0.1:${server.address().port}/api/platform${route}`, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Demo-User': user }, ...(data === undefined ? {} : { body: JSON.stringify({ data }) }) });
+  const invalid = structuredClone(config); invalid.company.name = '';
+  const result = await request('/config/validate', invalid);
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).data.valid, false);
+  assert.equal((await (await request('/config/draft')).json()).data.company.name, config.company.name);
+  assert.equal((await request('/config/validate', invalid, 'demo-interviewer')).status, 403);
+  assert.equal((await request('/config/activate', { expectedVersion: 0, expectedDraft: config })).status, 409);
+  assert.equal((await request('/config/rollback', { version: 1, expectedVersion: 0 })).status, 409);
+  assert.equal((await (await request('/bootstrap')).json()).data.configVersion, 1);
+});
+
+test('activation rejects changed drafts and stale versions without changing active configuration or users', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-review-'));
+  const db = openDatabase(path.join(dir, 'ats.sqlite'));
+  t.after(() => { db.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const reviewed = defaults('corporate');
+  seedCompany(db, 'local-company', reviewed, { seedDemo: false });
+  const changed = structuredClone(reviewed);
+  changed.company.name = 'Changed after review';
+  db.prepare('UPDATE platform_config SET draft=?').run(JSON.stringify(changed));
+  const activate = options => activateConfiguration(db, { config: changed, actorId: 'demo-admin', ...options });
+  assert.throws(() => activate({ expectedDraft: reviewed, expectedVersion: 1 }), { status: 409 });
+  assert.equal(JSON.parse(db.prepare('SELECT active FROM platform_config').get().active).company.name, reviewed.company.name);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM platform_config_versions').get().count, 1);
+  const result = activate({ expectedDraft: changed, expectedVersion: 1 });
+  assert.equal(result.version, 2);
+  assert.throws(() => activate({ expectedDraft: changed, expectedVersion: 1 }), { status: 409 });
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM platform_config_versions').get().count, 2);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM platform_users').get().count, reviewed.users.length);
+});

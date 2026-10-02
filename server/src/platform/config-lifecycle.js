@@ -2,6 +2,7 @@
 
 const { validateConfig } = require('../../../shared/ats-config.cjs');
 const { now } = require('./database');
+const { isDeepStrictEqual } = require('node:util');
 
 const COMPANY_ID = 'local-company';
 
@@ -37,18 +38,26 @@ function activateConfiguration(db, {
   note = 'Activated draft',
   companyId = COMPANY_ID,
   audit,
+  expectedVersion,
+  expectedDraft,
 } = {}) {
   const validation = validateConfig(config);
   if (!validation.valid) throw new ConfigurationValidationError(validation);
 
-  const current = db.prepare('SELECT active_version FROM platform_config WHERE company_id=?').get(companyId);
-  if (!current) throw new Error(`Platform configuration for ${companyId} has not been initialized.`);
-
   const timestamp = now();
-  const version = Number(current.active_version) + 1;
+  let version;
   const serialized = JSON.stringify(config);
   db.exec('BEGIN IMMEDIATE');
   try {
+    const current = db.prepare('SELECT active_version,draft FROM platform_config WHERE company_id=?').get(companyId);
+    if (!current) throw new Error(`Platform configuration for ${companyId} has not been initialized.`);
+    if ((expectedVersion !== undefined && Number(expectedVersion) !== Number(current.active_version)) ||
+        (expectedDraft !== undefined && !isDeepStrictEqual(expectedDraft, JSON.parse(current.draft)))) {
+      const conflict = new Error('Configuration changed since review. Reload Settings and review the latest draft before activation.');
+      conflict.status = 409;
+      throw conflict;
+    }
+    version = Number(current.active_version) + 1;
     db.prepare('UPDATE platform_config SET active=?,draft=?,active_version=?,updated_at=? WHERE company_id=?')
       .run(serialized, serialized, version, timestamp, companyId);
     db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)')

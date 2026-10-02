@@ -16,7 +16,7 @@ Generated workspaces do not contain customer-specific source branches. Company d
 
 ## Guided builder
 
-Run the configurator and local ATS together:
+Use Node.js 22.13 or newer (Node.js 24 is recommended) and npm. Run the configurator and local ATS together:
 
 ```bash
 npm run setup
@@ -38,15 +38,15 @@ The buyer-facing builder uses progressive setup rather than requiring raw JSON:
 5. Default pipeline and approval approach
 6. Review, validation and generation
 
-Corporate, recruitment-agency, startup, campus-heavy and minimal presets initialize the draft without locking any setting. The builder supports save/resume in the browser, configuration import/export, section reset, complete reset, contradiction warnings and an optional advanced JSON editor on the review step.
+Corporate, recruitment-agency, startup, campus-heavy and minimal presets initialize the draft without locking any setting. The builder supports save/resume in the browser, configuration import/export, section reset, complete reset, contradiction warnings and an optional advanced JSON editor on the review step. Settings warn before in-app navigation or browser unload can discard dirty edits. Preset changes and module changes are confirmed before applying; rollback also requires confirmation.
 
-Generate with **Apply this configuration** enabled to make the same configuration active in the factory’s local ATS. The downloadable archive always contains an isolated workspace.
+Before activation, the review step presents a readable item-level diff against the active configuration and requires acknowledgment. Server validation plus draft/version concurrency checks protect activation and rollback from stale or invalid updates. Generate with **Apply this configuration** enabled to make the same configuration active in the factory’s local ATS. The downloadable archive always contains an isolated workspace.
 
 ## Deeper administration
 
 The generated/local ATS Settings area exposes the complete schemaV2 configuration in categorized sections, including organization structure, roles and sensitive data, pipelines, custom fields, application forms, scorecards, communications, automations, offers, onboarding, careers, privacy, integrations and agency settings.
 
-Draft changes are validated before activation. Active configuration history can be reviewed and rolled back. Imported older configurations are migrated where supported.
+Draft changes are validated before activation. Active configuration history can be reviewed and rolled back with confirmation and concurrency checks. Imported older configurations are migrated where supported. Careers presentation reads configured company identity, logo, colors, careers copy, terminology, and regional date/salary formats, including when there are no published jobs.
 
 ## Run a generated workspace
 
@@ -56,7 +56,17 @@ npm run setup
 npm run local
 ```
 
-Open `http://127.0.0.1:5173/platform`. The first launch creates and seeds the workspace’s SQLite database from `config/platform.config.json`.
+Open `http://127.0.0.1:5173/platform`. The first launch creates the workspace’s SQLite database using `config/platform.config.json`. Generated workspaces set `seedDemo:false`, so operational records start empty; local mock-user switching remains available for development and role checks. `npm run setup` uses the checked-in lockfiles via `npm ci` for reproducible installs.
+
+Generated workspaces include backup scripts:
+
+```bash
+npm run backup:create -- --destination /absolute/path/to/ats-backup
+npm run backup:preview -- --bundle /absolute/path/to/ats-backup
+npm run backup:restore -- --bundle /absolute/path/to/ats-backup --confirm
+```
+
+Stop the ATS before backup or restore. Restore validates the bundle and retains replaced data for rollback. See [LOCAL_BACKUP_RESTORE.md](LOCAL_BACKUP_RESTORE.md) for options, safety behavior, and factory-repository commands.
 
 ## Local authentication and integrations
 
@@ -69,7 +79,7 @@ This development phase intentionally uses:
 - a mock calendar adapter;
 - configuration placeholders/adapters for future hosted providers.
 
-No Google OAuth, Supabase project, Vercel deployment or paid integration is required. Do not expose the sample authentication mode as production authentication.
+No Google OAuth, Supabase project, Vercel deployment or paid integration is required. Authentication is local mock authentication; do not present it as production identity or claim a hosted production deployment.
 
 ## Verification
 
@@ -79,6 +89,7 @@ npm --prefix server test
 npm run lint
 npm run build
 npm run config:validate
+npm run test:generated
 ```
 
-The platform suite includes builder preset validation, configuration behavior, workflow engines, RBAC, privacy/data administration and route-level acceptance. See `docs/ATS_ACCEPTANCE.md` for exact verified checkpoints and the remaining browser-environment limitation.
+The platform suite includes builder preset validation, configuration behavior, workflow engines, RBAC, privacy/data administration and route-level acceptance. The 2026-10-02 final run passed 271 platform tests and 21 actual Chromium browser checks, including corporate and agency workflows and Builder regeneration preserving customer records/documents. Corporate, agency and startup generated packages each installed, built and passed 259 tests plus runtime/backup checks. See `docs/READINESS_2026-10-02.md` and `docs/ATS_ACCEPTANCE.md` for exact evidence and limitations. For reproducible Chromium acceptance, run `npx playwright install chromium` once, then `npm run test:browser`; the harness starts its own isolated services. Run `npm run test:generated` for the generated package matrix. These checks do not establish hosted production readiness.

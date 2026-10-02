@@ -1,0 +1,17 @@
+.platform-careers { color: var(--platform-ink); }
+.platform-career-brand .platform-brand-mark img { object-fit: contain; }
+.platform-careers[data-color-mode="dark"] .platform-career-header,
+.platform-careers[data-color-mode="dark"] .platform-career-footer,
+.platform-careers[data-color-mode="dark"] .platform-career-detail,
+.platform-careers[data-color-mode="dark"] .platform-career-jobs,
+.platform-careers[data-color-mode="dark"] .platform-career-job {
+  background: var(--platform-surface);
+  border-color: var(--platform-line);
+}
+.platform-careers[data-color-mode="dark"] .platform-career-job strong,
+.platform-careers[data-color-mode="dark"] .platform-career-description h3 {
+  color: var(--platform-ink);
+}
+.platform-careers[data-color-mode="dark"] .platform-career-job:hover {
+  background: color-mix(in srgb, var(--platform-primary) 8%, var(--platform-surface));
+}

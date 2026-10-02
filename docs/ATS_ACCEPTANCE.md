@@ -4,17 +4,41 @@ This ledger tracks the requested local SaaS platform expansion. A configuration 
 
 ## Scope and safety
 
-- Work directory: `/workspace/scratch/a4e1d83b502e`.
-- This directory has no Git metadata. No original FyndBridge repository may be changed.
+- Current work directory: `/workspace/SAAS.ats`, Git `main`, base `c65d2c8`. The original extracted directories described below are historical.
+- The user authorized committing and pushing the verified readiness changes on 2026-10-02. No original Fyndbridge repository was accessed or modified.
 - Runtime: localhost, SQLite, local files, explicitly labelled mock user switching.
 - External email, calendars, payments and identity providers must remain mock adapters.
 - Platform capabilities, company configuration and operational records must remain separate.
 
-## Baseline audit
+## Final local readiness verification — 2026-10-02
+
+The final integrated pass supersedes the paused [checkpoint](CHECKPOINT_2026-10-02.md) and historical browser-blocked notes below. See [READINESS_2026-10-02.md](READINESS_2026-10-02.md) for files, architecture, subagent models, flows and setup instructions. All commands below exited successfully on Node 24.19.0 in the cloud checkout before publication. The user subsequently authorized committing and pushing this pass.
+
+| Exact command | Final result |
+| --- | --- |
+| `npm run test:platform` | 271 passed, 0 failed, 0 skipped |
+| `npm --prefix server test` | 912 passed, 0 failed, 0 skipped |
+| `npm test` | 30 passed, 0 failed, 0 skipped |
+| `npm run lint` | Passed |
+| `npm run build` | Passed; one nonblocking legacy mixed static/dynamic import warning |
+| `npm run config:validate` | Corporate default schema v2 valid |
+| `npm audit --omit=dev` | 0 vulnerabilities |
+| `npm --prefix server audit --omit=dev` | 0 vulnerabilities |
+| `npm audit` | 0 vulnerabilities, including development dependencies |
+| `npm --prefix server audit` | 0 vulnerabilities, including development dependencies |
+| `npm run test:generated` | Corporate/agency/startup: 259 tests each; 6 installs, 3 builds, 4 API starts, 31 runtime/backup assertions, 9 backup CLI commands |
+| `ATS_BROWSER_EXECUTABLE=/tmp/ats-chromium npm run test:browser` | 21 actual Chromium checks passed; no captured page/console errors |
+| `git diff --check` | Passed |
+
+Chromium 153.0.8010.0 navigated the Builder, `/platform` and `/careers-platform`, at 1440×960 and 390×844. It exercised preview/generation/Apply/regeneration, settings dirty protection/diff/activation/rollback, public applications/resumes and document versions/downloads, corporate requisition approvals/job publication/pipeline/interview/scorecard/offer/onboarding, reports/tasks/notifications/audit, restricted mock users and an agency client→mandate→submission→placement→invoice→guarantee journey. Regeneration preserved an existing customer record and local document; its archive excluded operational data. Three independently generated presets also passed install/build/API/backup checks and differed in module permissions, terminology and pipelines.
+
+This completes the requested local readiness pass, with an engineering estimate of approximately **95% isolated-local product readiness**, not measured coverage of every original buyer setting. Remaining product review areas include deeper business-friendly editors and exact-page preview coverage, exhaustive accessibility/cross-browser/large-data testing and uncommon workflow variants. The user's Mac was not accessible. Hosted identity, providers, tenancy/fleet provisioning, billing and remote disaster recovery remain outside this local phase. Mock auth must not be deployed as real production identity; production mode without a real adapter fails closed. Local EICAR behavior is a scanner mock, not production antivirus or a compliance guarantee.
+
+## Historical baseline audit
 
 Existing reusable assets include the React/Vite application, Express API, company branding, legacy agency screens, configuration editor, package generator, and local SQLite storage. Existing local permissions, notifications, duplicate checks and document handling contain placeholders and cannot satisfy the expanded requirements. The legacy backend regression suite does not verify new platform behavior.
 
-## Acceptance groups
+## Historical acceptance groups (initial baseline, not current verification)
 
 | Requirements | Required evidence | Status |
 | --- | --- | --- |
@@ -46,7 +70,7 @@ The current platform is a substantial local scaffold, not yet a complete product
 
 Current priority workstreams are privacy and write-boundary enforcement, scoped authorization for linked records, correct settings editing and activation, operable workflow forms, and persisted stage history for reporting. Remaining acceptance work includes complete notes/timeline/documents, saved views/CRM/referrals, privacy retention and request handling, more specific reports and agency flows, and full browser interaction testing. Do not mark these complete based on config fields or generic CRUD alone.
 
-## Current verified checkpoints
+## Historical verified checkpoints
 
 ### Split-screen live configuration preview — 2026-09-28
 

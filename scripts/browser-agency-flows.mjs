@@ -1,0 +1,103 @@
+import assert from 'node:assert/strict'
+
+// Exercises the agency lifecycle through the real workspace UI. The API is
+// used only to resolve seeded references and to verify persisted results.
+export async function verifyAgencyWorkflow({ page, api, check }) {
+  const client = (await api('/records/clients')).find(row => row.name === 'Browser Acceptance Client')
+  const candidate = (await api('/records/candidates')).find(row => row.email === 'browser-applicant@example.test')
+  assert.ok(client, 'Agency client fixture is available')
+  assert.ok(candidate, 'Agency candidate fixture is available')
+  const candidateName = candidate.name || candidate.fullName || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim()
+
+  const title = 'Browser Agency Mandate'
+  await check('Agency mandate submission placement invoice and guarantee workflow', async () => {
+    await page.locator('.platform-nav-link').filter({ hasText: /^Mandates$/ }).click()
+    await page.getByRole('button', { name: /Add mandate/i }).first().click()
+    const create = page.locator('.platform-form').filter({ has: page.getByRole('button', { name: /^Create / }) })
+    await create.getByLabel('Title', { exact: false }).fill(title)
+    await create.locator('[name=clientId]').selectOption(String(client.id))
+    const employment = create.getByLabel('Employment type', { exact: false })
+    await employment.selectOption({ index: 1 })
+    const pipeline = create.getByLabel('Pipeline', { exact: false })
+    if (await pipeline.count()) {
+      const defaultPipeline = (await api('/bootstrap')).config.pipelines.find(item => item.default || item.isDefault) || (await api('/bootstrap')).config.pipelines[0]
+      assert.ok(defaultPipeline, 'Agency pipeline is configured')
+      await pipeline.selectOption(String(defaultPipeline.id))
+    }
+    await create.getByRole('button', { name: /^Create / }).click()
+    await page.getByText(title, { exact: true }).waitFor()
+    const mandate = (await api('/records/jobs')).find(row => row.title === title)
+    assert.ok(mandate, 'Mandate was created through the UI')
+    assert.equal(String(mandate.clientId), String(client.id))
+
+    await page.locator('.platform-nav-link').filter({ hasText: /^Candidate submissions$/ }).click()
+    await page.getByRole('button', { name: /Add candidate submission/i }).first().click()
+    const submissionForm = page.locator('.platform-form').filter({ has: page.getByRole('button', { name: /^Create candidate submission$/ }) })
+    await submissionForm.locator('[name=candidateId]').selectOption(String(candidate.id))
+    await submissionForm.locator('[name=clientId]').selectOption(String(client.id))
+    await submissionForm.locator('[name=jobId]').selectOption(String(mandate.id))
+    const feeType = submissionForm.getByLabel('Fee type', { exact: false })
+    if (await feeType.count()) await feeType.selectOption({ index: 1 })
+    const fee = submissionForm.locator('[name=fee]')
+    if (await fee.count()) await fee.fill('9000')
+    await submissionForm.getByRole('button', { name: /^Create candidate submission$/ }).click()
+    await page.locator('.platform-modal').waitFor({ state: 'hidden' })
+    await page.getByText(candidateName, { exact: false }).first().waitFor()
+    const submission = (await api('/records/submissions')).find(row => String(row.candidateId) === String(candidate.id) && String(row.jobId) === String(mandate.id))
+    assert.ok(submission, 'Submission was created through the UI')
+
+    await page.getByText(candidateName, { exact: false }).first().click()
+    await page.locator('.platform-record-drawer').waitFor()
+    await page.getByRole('dialog').getByRole('button', { name: /^Submit$/ }).click()
+    await page.locator('.platform-modal').getByRole('button', { name: /^Submit$/ }).click()
+    await page.locator('.platform-modal').waitFor({ state: 'hidden' })
+    let savedSubmission = (await api('/records/submissions')).find(row => row.id === submission.id)
+    assert.equal(savedSubmission.status, 'submitted')
+    await page.getByRole('dialog').getByRole('button', { name: /^Place$/ }).click()
+    await page.getByLabel('Placement start date', { exact: false }).fill(new Date().toISOString().slice(0, 10))
+    await page.getByLabel('Placement fee', { exact: false }).fill('9000')
+    await page.getByLabel('Fee type', { exact: false }).selectOption({ index: 1 })
+    await page.locator('.platform-modal').getByRole('button', { name: /^Save$/ }).click()
+    await page.locator('.platform-modal').waitFor({ state: 'hidden' })
+    const placements = await api('/records/placements')
+    const placement = placements.find(row => String(row.submissionId) === String(submission.id))
+    assert.ok(placement, 'Placement was created from the submitted candidate')
+    assert.equal(Number(placement.fee), 9000)
+
+    await page.locator('.platform-record-drawer').getByRole('button', { name: /^Invoice$/ }).click()
+    const dueDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+    await page.getByLabel('Due date', { exact: false }).fill(dueDate)
+    await page.locator('.platform-modal').getByRole('button', { name: /^Invoice$/ }).click()
+    await page.getByRole('button', { name: /Preview invoice/i }).waitFor()
+    const invoice = (await api('/records/invoices')).find(row => String(row.placementId) === String(placement.id))
+    assert.ok(invoice, 'Invoice was created from the placement')
+    assert.equal(Number(invoice.amount), Number(placement.fee))
+    assert.equal(invoice.dueAt, dueDate)
+    const previewPromise = page.context().waitForEvent('page')
+    // Action opens the invoice drawer; preview is an explicit user action in it.
+    await page.getByRole('button', { name: /Preview invoice/i }).click()
+    const previewTab = await previewPromise
+    await previewTab.waitForURL(/^blob:/)
+    await previewTab.getByText(/9,000|9000/).first().waitFor()
+    await previewTab.close()
+
+    // Return to the placement drawer (the workflow action navigates to invoices).
+    await page.getByRole('button', { name: 'Close details', exact: true }).click()
+    await page.locator('.platform-nav-link').filter({ hasText: /^Placements$/ }).click()
+    await page.getByText(candidateName, { exact: false }).first().click()
+    await page.getByLabel('Request guarantee claim').fill('Browser acceptance guarantee review request.')
+    await page.getByRole('button', { name: 'Request review', exact: true }).click()
+    await page.getByLabel('Review note').waitFor()
+    let persistedPlacement = (await api('/records/placements')).find(row => row.id === placement.id)
+    assert.equal(persistedPlacement.guaranteeStatus, 'requested')
+    await page.getByLabel('Review note').fill('Reviewed during browser acceptance.')
+    assert.equal(await page.getByRole('button', { name: 'Approve claim', exact: true }).count(), 0)
+    await page.getByRole('button', { name: 'Save review', exact: true }).click()
+    await page.getByRole('button', { name: 'Approve claim', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Approve claim', exact: true }).click()
+    await page.getByLabel('Replacement candidate').waitFor()
+    persistedPlacement = (await api('/records/placements')).find(row => row.id === placement.id)
+    assert.equal(persistedPlacement.guaranteeStatus, 'approved')
+    await page.getByRole('button', { name: 'Close details', exact: true }).click()
+  })
+}

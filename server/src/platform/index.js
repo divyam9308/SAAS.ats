@@ -30,8 +30,12 @@ const { createInterviewReminderScheduler } = require('./local-scheduler');
 const { InterviewCalendarError, validateInterviewSchedule, findInterviewConflict, createMockCalendarEvent, transitionMockCalendarEvent } = require('./interview-calendar');
 const { activateConfiguration, syncConfiguredUsers } = require('./config-lifecycle');
 const { inspectDocument, localDocumentScanner } = require('./document-security');
+const { acquirePlatformRuntimeLock } = require('./runtime-lock');
+const { projectRecordLabels } = require('./record-presentation');
 
 const COMPANY = 'local-company';
+const TIMELINE_KINDS = RECORD_KINDS.filter(kind => !['audit', 'outbox', 'automations', 'notifications', 'notes', 'documents', 'savedViews'].includes(kind));
+const CAPABILITIES = { timelineKinds: TIMELINE_KINDS };
 const send = (res, data, status = 200) => res.status(status).json({ data });
 const fail = (res, status, error) => res.status(status).json({ error: String(error) });
 const clean = value => JSON.parse(JSON.stringify(value));
@@ -77,11 +81,14 @@ function automationActionAuthorization(action = {}, targetKind) {
 
 function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'server', 'data', 'documents'), initialConfig, seedDemo = true, documentScanner, demoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.LOCAL_DEMO_MODE === 'true', schedulerEnabled = false, schedulerIntervalMs } = {}) {
   const router = express.Router();
-  const db = openDatabase(dbPath);
+  const databasePath = dbPath || process.env.ATS_PLATFORM_DB || path.join(process.cwd(), 'server', 'data', 'platform.sqlite');
+  const releaseRuntime = acquirePlatformRuntimeLock(databasePath);
+  let db;
+  try { db = openDatabase(databasePath); } catch (error) { releaseRuntime(); throw error; }
   const configInput = initialConfig || require('../../../shared/ats-config.cjs').defaults('corporate');
-  seedCompany(db, COMPANY, configInput, { seedDemo });
+  try { seedCompany(db, COMPANY, configInput, { seedDemo }); } catch (error) { db.close(); releaseRuntime(); throw error; }
   const store = createStore(db, COMPANY);
-  fs.mkdirSync(dataDir, { recursive: true });
+  try { fs.mkdirSync(dataDir, { recursive: true }); } catch (error) { db.close(); releaseRuntime(); throw error; }
   const cfgRow = () => db.prepare('SELECT active,draft,active_version FROM platform_config WHERE company_id=?').get(COMPANY);
   const config = () => parseJson(cfgRow().active, {});
   const users = () => db.prepare('SELECT data FROM platform_users WHERE company_id=?').all(COMPANY).map(r => parseJson(r.data));
@@ -95,7 +102,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   let closed = false;
   const reminderScheduler = createInterviewReminderScheduler({ db, store, config, users, audit: (event, kind, recordId, details) => audit('system', event, kind, recordId, details), enabled: schedulerEnabled, intervalMs: schedulerIntervalMs });
   reminderScheduler.start();
-  router.close = () => { if (closed) return; closed = true; reminderScheduler.stop(); db.close(); };
+  router.close = () => { if (closed) return; closed = true; reminderScheduler.stop(); try { db.close(); } finally { releaseRuntime(); } };
   const auth = (req, res, next) => {
     if (!demoAuthEnabled) return fail(res, 503, 'Production authentication adapter is not configured');
     const user = users().find(u => u.id === (req.get('x-demo-user') || 'demo-admin'));
@@ -153,7 +160,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     for (const field of ['id', 'name', 'fullName', 'firstName', 'lastName', 'title', 'currentTitle', 'skills', 'location', 'city', 'country', 'updatedAt', 'lastActivityAt']) if (candidate[field] !== undefined) projection[field] = candidate[field];
     return [{ ...member, candidate: projection }];
   }) });
-  const visibleRecord = (req, kind, row) => masked(req, kind === 'talentPools' ? projectPool(req, row) : row);
+  const visibleRecord = (req, kind, row) => masked(req, projectRecordLabels(kind, kind === 'talentPools' ? projectPool(req, row) : row, { get: (linkedKind, id) => store.get(linkedKind, id), canView: linkedKind => moduleEnabled(req.config, linkedKind) && hasPermission(req.actor, `${linkedKind}:view`, req.config), readable: (linkedKind, linked) => readable(req, linked, linkedKind), users: req.localsUsers }));
   const visibleList = (req, kind) => store.list(kind).filter(row => readable(req, row, kind)).map(row => visibleRecord(req, kind, row));
   const noteParent = note => {
     const kind = note.relatedKind || (note.candidateId ? 'candidates' : note.jobId ? 'jobs' : note.applicationId ? 'applications' : note.clientId ? 'clients' : note.offerId ? 'offers' : null);
@@ -582,8 +589,8 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const actorRole = configData.roles?.find(r => r.id === req.actor.roleId) || {};
     const visibleUsers = users().map(u => ({ id: u.id, name: u.name, roleId: u.roleId, departmentId: u.departmentId, locationId: u.locationId }));
     if (!hasPermission(req.actor, 'dashboard:view', configData)) {
-      const navConfig = { company: configData.company, branding: configData.branding, terminology: configData.terminology, modules: configData.modules };
-      return send(res, { config: navConfig, user: req.actor, users: visibleUsers, modules: configData.modules, counts: {}, role: { id: actorRole.id, name: actorRole.name, permissions: actorRole.permissions } });
+      const navConfig = { company: configData.company, branding: configData.branding, terminology: configData.terminology, regional: configData.regional, modules: configData.modules, pipelines: configData.pipelines, scorecards: configData.scorecards, interviews: configData.interviews, roles: [actorRole], users: visibleUsers };
+      return send(res, { config: navConfig, configVersion: cfgRow().active_version, capabilities: CAPABILITIES, user: req.actor, users: visibleUsers, modules: configData.modules, counts: {}, role: { id: actorRole.id, name: actorRole.name, permissions: actorRole.permissions } });
     }
     const canReadOrganization = hasPermission(req.actor, 'organization:view', configData) || hasPermission(req.actor, 'organization:administer', configData);
     const clientConfig = canReadOrganization ? configData : {
@@ -595,7 +602,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       roles: [actorRole], users: visibleUsers
     };
     const countObj = Object.fromEntries(RECORD_KINDS.map(kind => [kind, visibleList(req, kind).length]));
-    send(res, { config: clientConfig, user: req.actor, users: visibleUsers, modules: configData.modules, counts: countObj, role: actorRole });
+    send(res, { config: clientConfig, configVersion: cfgRow().active_version, capabilities: CAPABILITIES, user: req.actor, users: visibleUsers, modules: configData.modules, counts: countObj, role: actorRole });
   });
   router.get('/records/:kind', (req, res) => {
     const { kind } = req.params;
@@ -796,7 +803,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       audit(req.actor.id, 'record.created', kind, row.id);
       enqueue(req, store, kind, 'created', row);
       db.exec('COMMIT'); transactionOpen = false;
-      return send(res, masked(req, row), 201);
+      return send(res, visibleRecord(req, kind, row), 201);
     } catch (e) { if (transactionOpen) db.exec('ROLLBACK'); return fail(res, e.status || 422, e.message); }
   });
   router.get('/records/:kind/:id', (req, res) => {
@@ -873,7 +880,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       const row = store.put(kind, next, req.actor.id);
       audit(req.actor.id, 'record.edited', kind, id, { fields: Object.keys(delta) }); enqueue(req, store, kind, 'updated', row);
       db.exec('COMMIT'); transactionOpen = false;
-      return send(res, masked(req, row));
+      return send(res, visibleRecord(req, kind, row));
     } catch (e) { if (transactionOpen) db.exec('ROLLBACK'); return fail(res, e.status || 422, e.message); }
   });
   router.delete('/records/:kind/:id', (req, res) => {
@@ -993,19 +1000,20 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       const ctx = { user: req.actor, config: req.config, audit: (event, k, rid, details) => audit(req.actor.id, event, k, rid, details), emit: (event, payload) => emitEvent(req, store, event, payload), canApproveAny: false };
       const result = workflowAction(store, kind, row, actionName, req.body?.data || {}, ctx);
       db.exec('COMMIT'); transactionOpen = false;
-      return send(res, masked(req, result));
+      const resultKind = ({ 'requisitions:create-job': 'jobs', 'submissions:place': 'placements', 'placements:invoice': 'invoices' })[`${kind}:${actionName}`] || kind;
+      return send(res, visibleRecord(req, resultKind, result));
     } catch (e) { if (transactionOpen) db.exec('ROLLBACK'); return fail(res, e.status || 422, e.message); }
   });
 
   router.get('/timeline/:kind/:id', (req, res) => {
     const kind = req.params.kind;
-    if (!linkedNotes.SUPPORTED_KINDS.has(kind)) return fail(res, 404, 'Unsupported timeline record type');
+    if (!TIMELINE_KINDS.includes(kind)) return fail(res, 404, 'Unsupported timeline record type');
     if (!permitted(req, res, kind, 'view')) return;
     const parent = store.get(kind, req.params.id);
     if (!parent || !readable(req, parent, kind)) return fail(res, 404, 'Record not found or outside your scope');
     const appIds = new Set(store.list('applications').filter(row => row.candidateId === parent.id || row.jobId === parent.id).map(row => row.id));
     const linked = row => row.relatedKind === kind && row.relatedId === parent.id ||
-      [['candidateId', 'candidates'], ['jobId', 'jobs'], ['applicationId', 'applications'], ['clientId', 'clients'], ['offerId', 'offers']].some(([field, parentKind]) => parentKind === kind && row[field] === parent.id) ||
+      [['candidateId', 'candidates'], ['jobId', 'jobs'], ['applicationId', 'applications'], ['clientId', 'clients'], ['offerId', 'offers'], ['interviewId', 'interviews'], ['submissionId', 'submissions'], ['placementId', 'placements'], ['invoiceId', 'invoices'], ['onboardingId', 'onboarding']].some(([field, parentKind]) => parentKind === kind && row[field] === parent.id) ||
       (kind === 'applications' && (row.applicationId === parent.id || row.relatedKind === 'applications' && row.relatedId === parent.id)) ||
       (kind === 'candidates' && row.applicationId && appIds.has(row.applicationId)) ||
       (kind === 'jobs' && row.applicationId && appIds.has(row.applicationId));
@@ -1085,6 +1093,10 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   });
 
   router.get('/config/draft', (req, res) => { if (!permitted(req, res, 'organization', 'view')) return; send(res, parseJson(cfgRow().draft, {})); });
+  router.post('/config/validate', (req, res) => {
+    if (!permitted(req, res, 'organization', 'edit')) return;
+    send(res, require('../../../shared/ats-config.cjs').validateConfig(req.body?.data));
+  });
   router.put('/config/draft', (req, res) => {
     if (!permitted(req, res, 'organization', 'edit')) return;
     const draft = req.body?.data;
@@ -1102,10 +1114,13 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
         actorId: req.actor.id,
         note: req.body?.data?.note || 'Activated draft',
         companyId: COMPANY,
+        expectedVersion: req.body?.data?.expectedVersion,
+        expectedDraft: req.body?.data?.expectedDraft,
         audit: (event, kind, recordId, details) => audit(req.actor.id, event, kind, recordId, details),
       });
       send(res, { version: result.version, config: result.config });
     } catch (error) {
+      if (error.status === 409) return fail(res, 409, error.message);
       if (error.status === 422) return res.status(422).json({ error: error.message, details: error.details, warnings: error.warnings });
       throw error;
     }
@@ -1114,11 +1129,20 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     if (!permitted(req, res, 'organization', 'administer')) return;
     const version = Number(req.body?.data?.version); const prior = db.prepare('SELECT config FROM platform_config_versions WHERE company_id=? AND version=?').get(COMPANY, version);
     if (!prior) return fail(res, 404, 'Configuration version not found');
-    const configData = parseJson(prior.config, {}); const next = cfgRow().active_version + 1; const timestamp = now();
-    db.prepare('UPDATE platform_config SET active=?,draft=?,active_version=?,updated_at=? WHERE company_id=?').run(prior.config, prior.config, next, timestamp, COMPANY);
-    db.prepare('INSERT INTO platform_config_versions(company_id,version,config,actor_id,created_at,note) VALUES(?,?,?,?,?,?)').run(COMPANY, next, prior.config, req.actor.id, timestamp, `Rollback to version ${version}`); syncConfiguredUsers(db, configData, COMPANY); audit(req.actor.id, 'configuration.rolled-back', 'config', null, { from: version, version: next }); send(res, { version: next, config: configData });
+    const configData = parseJson(prior.config, {});
+    try {
+      const restored = activateConfiguration(db, {
+        config: configData, actorId: req.actor.id, companyId: COMPANY, note: `Rollback to version ${version}`, expectedVersion: req.body?.data?.expectedVersion,
+        audit: (_event, kind, id, details) => audit(req.actor.id, 'configuration.rolled-back', kind, id, { from: version, ...details }),
+      });
+      send(res, { version: restored.version, config: restored.config });
+    } catch (error) {
+      if ([409, 422].includes(error.status)) return res.status(error.status).json({ error: error.message, details: error.details });
+      throw error;
+    }
   });
 
+  router.get('/public/company', (req, res) => { if (!moduleEnabled(config(), 'careers')) return fail(res, 404, 'Careers site is disabled'); send(res, publicCompany(config())); });
   router.get('/public/jobs', (req, res) => send(res, store.list('jobs').filter(j => j.status === 'open' && j.visibility === 'public' && moduleEnabled(config(), 'careers')).map(j => publicJob(j, config()))));
   router.get('/public/jobs/:id', (req, res) => { const job = store.get('jobs', req.params.id); if (!job || job.status !== 'open' || job.visibility !== 'public' || !moduleEnabled(config(), 'careers')) return fail(res, 404, 'Job not found'); send(res, publicJob(job, config())); });
   router.post('/public/jobs/:id/apply', (req, res) => {
@@ -1447,9 +1471,17 @@ function publicJob(job, config) {
   const customFields = Object.fromEntries(Object.entries(job.customFields || {}).filter(([key]) => allowedFields.has(key)));
   if (Object.keys(customFields).length) visible.customFields = customFields;
   const form = (config.applicationForms || []).find(f => f.id === job.applicationFormId) || config.applicationForms?.[0] || null;
-  const branding = config.branding || {};
   return {
     ...visible,
+    ...publicCompany(config),
+    applicationForm: form, applicationConditions: form?.conditions || [], knockoutQuestions: form?.knockoutQuestions || []
+  };
+}
+function publicCompany(config) {
+  const branding = config.branding || {};
+  const careersCopyKeys = ['eyebrow', 'headline', 'intro', 'brandSubheading', 'searchPlaceholder', 'openRole', 'openRoles', 'loading', 'noMatchesTitle', 'noMatchesDescription', 'allOpenings', 'apply', 'applicationIntro', 'submit', 'submitting', 'receivedTitle', 'receivedDescription', 'salary', 'poweredBy', 'privacyFooter'];
+  const copy = Object.fromEntries(careersCopyKeys.filter(key => typeof config.careers?.copy?.[key] === 'string').map(key => [key, config.careers.copy[key]]));
+  return {
     company: { name: config.company?.name, website: config.company?.website },
     branding: {
       productName: branding.productName,
@@ -1462,12 +1494,12 @@ function publicJob(job, config) {
       typography: branding.typography,
       fontFamily: branding.fontFamily,
       favicon: branding.favicon,
-      loginSubheading: branding.loginSubheading,
     },
-    careers: { headline: config.careers?.headline, intro: config.careers?.intro, footer: config.careers?.footer },
+    careers: { headline: config.careers?.headline, intro: config.careers?.intro, footer: config.careers?.footer, copy },
     terminology: { jobs: config.terminology?.jobs, candidates: config.terminology?.candidates },
-    regional: { locale: config.regional?.locale, timezone: config.regional?.timezone, dateFormat: config.regional?.dateFormat, timeFormat: config.regional?.timeFormat },
-    privacyNotice: config.privacy?.notice || '', applicationForm: form, applicationConditions: form?.conditions || [], knockoutQuestions: form?.knockoutQuestions || []
+    regional: { locale: config.regional?.locale, language: config.regional?.language, numberLocale: config.regional?.numberLocale, currency: config.regional?.currency, timezone: config.regional?.timezone, dateFormat: config.regional?.dateFormat, timeFormat: config.regional?.timeFormat },
+    privacyNotice: config.privacy?.notice || '',
+    privacy: { consentRequired: config.privacy?.consentRequired !== false }
   };
 }
 function referralResponse(referral) {

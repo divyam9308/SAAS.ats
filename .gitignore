@@ -26,6 +26,7 @@ server/.env.*
 /output/
 /outputs/
 /generated/
+/server/data/
 /configs/*.json
 
 # Editor directories and files

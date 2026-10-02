@@ -15,7 +15,7 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppErrorBoundary>
       <App />
-      {!isLocalDemo && <SpeedInsights />}
+      {!isLocalDemo && import.meta.env.VITE_PLATFORM_MODE !== 'true' && <SpeedInsights />}
     </AppErrorBoundary>
   </StrictMode>,
 )

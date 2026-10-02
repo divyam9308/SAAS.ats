@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Clock3, Download, ExternalLink, FileInput, FileOutput, History, PackagePlus, Plus, RotateCcw, Save, Search, Settings2, ShieldCheck, Trash2, Upload, WandSparkles, X } from 'lucide-react'
 import { platformRequest } from './api'
+import { getConfigDiff, getDisabledModuleWarnings, resolveConfigPath } from './config-review.js'
 import './Settings.css'
 
 const BUILDER_AVAILABLE = import.meta.env.VITE_BUILDER_AVAILABLE === 'true'
@@ -80,6 +81,8 @@ function normalizeConfig(config = {}) {
   normalized.branding ??= {}
   normalized.terminology ??= {}
   normalized.modules ??= {}
+  const careerCopyDefaults = Object.fromEntries(['eyebrow', 'brandSubheading', 'searchPlaceholder', 'noMatchesTitle', 'noMatchesDescription', 'apply', 'applicationIntro', 'submit', 'submitting', 'receivedTitle', 'receivedDescription', 'poweredBy', 'privacyFooter'].map((key) => [key, '']))
+  normalized.careers = { headline: '', intro: '', footer: '', ...normalized.careers, copy: { ...careerCopyDefaults, ...(normalized.careers?.copy || {}) } }
   return normalized
 }
 function emptyLike(sample) {
@@ -183,7 +186,7 @@ const SECTION_FIELDS = {
   hiring: { requests: 'requisitions' }, jobs: { employmentTypes: 'employmentTypes', templates: 'jobTemplates', customFields: 'customFields.jobs' },
   pipelines: { pipelines: 'pipelines' }, applications: { forms: 'applicationForms' }, candidates: { fields: 'customFields.candidates', taxonomy: 'taxonomies', documents: 'documents' },
   ownership: { users: 'users', organization: 'organization' }, interviews: { interviews: 'interviews', plans: 'interviewPlans' }, scorecards: { scorecards: 'scorecards', interviewPlans: 'interviewPlans' }, approvals: { workflows: 'approvalWorkflows', delegations: 'delegations' },
-  onboarding: { templates: 'onboardingTemplates', documents: 'documents' }, communications: { templates: 'communicationTemplates' }, automation: { rules: 'automations' }, careers: { modules: 'modules', forms: 'applicationForms', sources: 'sources', privacy: 'privacy', branding: 'branding' },
+  onboarding: { templates: 'onboardingTemplates', documents: 'documents' }, communications: { templates: 'communicationTemplates' }, automation: { rules: 'automations' }, careers: { modules: 'modules', forms: 'applicationForms', sources: 'sources', privacy: 'privacy', branding: 'branding', presentation: 'careers' },
   talent: { views: 'savedViews', taxonomy: 'taxonomies', sources: 'sources' }, collaboration: { documents: 'documents', audit: 'audit' },
   reporting: { targets: 'workforceTargets', sla: 'sla' }, data: { settings: 'data', documents: 'documents' }, privacy: { privacy: 'privacy' }, agency: { workflows: 'agency', pipeline: 'pipelines', sources: 'sources' }, workforce: { targets: 'workforceTargets' },
 }
@@ -206,20 +209,8 @@ function sectionContent(config, section) {
   return getAt(config, section.path) || {}
 }
 function canonicalPath(sectionId, localPath) {
-  const parts = pathParts(localPath)
-  const path = parts.join('.')
-  const mappedPaths = Object.values(SECTION_FIELDS[sectionId] || {})
-  // Nested editors receive canonical paths (for example customFields.jobs.0.label)
-  // after their parent collection has already been mapped. Do not map those a
-  // second time when their change bubbles back through updateSectionPath.
-  const alreadyCanonical = mappedPaths.find((mapped) => path === mapped || path.startsWith(`${mapped}.`))
-  if (alreadyCanonical) return path
-  const [head, ...tail] = parts
-  const mapped = SECTION_FIELDS[sectionId]?.[head]
-  if (mapped) return [mapped, ...tail].join('.')
-  if (sectionId === 'organization' && head === 'company') return ['company', ...tail].join('.')
-  if (sectionId === 'organization' && head === 'structure') return ['organization', ...tail].join('.')
-  return localPath
+  const sectionPath = SECTIONS.find((section) => section.id === sectionId)?.path
+  return resolveConfigPath(sectionId, sectionPath, SECTION_FIELDS[sectionId], localPath)
 }
 
 function sectionCollections(section, value = {}) {
@@ -237,13 +228,15 @@ function sectionCollections(section, value = {}) {
   return [...new Set([...preferred.filter((key) => Array.isArray(value[key])), ...list.map(([key]) => key)])]
 }
 
-export default function Settings({ config: initialConfig, onActivated }) {
+export default function Settings({ config: initialConfig, activeVersion: initialActiveVersion, onActivated, onDirtyChange }) {
   const [config, setConfig] = useState(() => normalizeConfig(initialConfig))
+  const [activeConfig, setActiveConfig] = useState(() => normalizeConfig(initialConfig))
   const [baseline, setBaseline] = useState(() => normalizeConfig(initialConfig))
   const [activeSection, setActiveSection] = useState('organization')
   const [query, setQuery] = useState('')
   const [validation, setValidation] = useState({ errors: [], warnings: [] })
   const [history, setHistory] = useState([])
+  const [activeVersion, setActiveVersion] = useState(Number(initialActiveVersion ?? initialConfig?.version) || 1)
   const [presets, setPresets] = useState([])
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
@@ -271,6 +264,8 @@ export default function Settings({ config: initialConfig, onActivated }) {
   const hasCanonicalRetention = config.privacy?.retentionDays != null
   const hasLegacyRetention = config.data?.retentionDays != null
   const modified = useMemo(() => JSON.stringify(config) !== JSON.stringify(baseline), [config, baseline])
+  const activeDiff = useMemo(() => getConfigDiff(activeConfig, config), [activeConfig, config])
+  const moduleWarnings = useMemo(() => getDisabledModuleWarnings(activeConfig, config), [activeConfig, config])
   const groupedSections = useMemo(() => {
     const queryValue = query.trim().toLowerCase()
     const filtered = SECTIONS.filter((section) => !queryValue || `${section.label} ${section.group} ${section.desc}`.toLowerCase().includes(queryValue))
@@ -278,7 +273,11 @@ export default function Settings({ config: initialConfig, onActivated }) {
   }, [query])
 
   const refreshHistory = useCallback(async () => {
-    try { const result = await platformRequest('/config/history'); setHistory(Array.isArray(result) ? result : result?.history || []) } catch { /* the settings form remains usable when history is empty */ }
+    try {
+      const result = await platformRequest('/config/history')
+      const rows = Array.isArray(result) ? result : result?.history || []
+      setHistory(rows)
+    } catch { /* the settings form remains usable when history is empty */ }
   }, [])
   useEffect(() => {
     let alive = true
@@ -295,6 +294,19 @@ export default function Settings({ config: initialConfig, onActivated }) {
     refreshHistory()
     return () => { alive = false }
   }, [refreshHistory])
+
+  useEffect(() => {
+    onDirtyChange?.(modified)
+  }, [modified, onDirtyChange])
+  useEffect(() => {
+    if (initialActiveVersion != null) setActiveVersion(Number(initialActiveVersion))
+  }, [initialActiveVersion])
+  useEffect(() => {
+    if (!modified) return undefined
+    const warnBeforeUnload = (event) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [modified])
 
   const updatePath = useCallback((path, value) => {
     setConfig((current) => setAt(current, path, value))
@@ -323,31 +335,38 @@ export default function Settings({ config: initialConfig, onActivated }) {
     } finally { setBusy(false) }
   }
   const validateAndReview = async () => {
-    setBusy(true); setError('')
     setReviewAcknowledged(false)
+    setError('')
+    setBusy(true)
     try {
+      const localValidation = await platformRequest('/config/validate', { method: 'POST', body: { data: config } })
+      setValidation(localValidation)
+      if (!localValidation?.valid) { setReviewOpen(true); return }
       const result = await platformRequest('/config/draft', { method: 'PUT', body: { data: config } })
       const payload = result?.config ? result : { config: result }
-      setValidation(payload.validation || { errors: [], warnings: [] })
       if (payload.config) { const normalized = normalizeConfig(payload.config); setConfig(normalized); setBaseline(normalized); setSavedAt(new Date()) }
       setReviewOpen(true)
     } catch (requestError) {
       const details = requestError.details
-      setValidation({ errors: Array.isArray(details) ? details : details?.errors || [requestError.message], warnings: details?.warnings || [] })
+      setValidation({ valid: false, errors: Array.isArray(details) ? details : details?.errors || [requestError.message], warnings: details?.warnings || [] })
       setReviewOpen(true)
     } finally { setBusy(false) }
   }
   const activateConfig = async () => {
+    const warnings = getDisabledModuleWarnings(activeConfig, config)
+    if (warnings.length && !window.confirm(`This change disables ${warnings.map((warning) => warning.name).join(', ')}. Existing records stay stored, but the related screens and new actions will be unavailable. Continue to activation?`)) return
     setBusy(true); setError('')
     try {
-      const result = await platformRequest('/config/activate', { method: 'POST', body: { data: { note: `Activated from Settings on ${new Date().toLocaleDateString()}` } } })
+      const result = await platformRequest('/config/activate', { method: 'POST', body: { data: { note: `Activated from Settings on ${new Date().toLocaleDateString()}`, expectedDraft: config, expectedVersion: activeVersion } } })
       const activated = normalizeConfig(result?.config || config)
-      setConfig(activated); setBaseline(activated); setReviewOpen(false); setStatus(`Configuration v${result?.version || getSchemaVersion(activated)} activated`)
+      if (result?.version != null) setActiveVersion(Number(result.version))
+      setConfig(activated); setBaseline(activated); setActiveConfig(activated); setReviewOpen(false); setStatus(`Configuration v${result?.version || getSchemaVersion(activated)} activated`)
       await refreshHistory(); onActivated?.(activated)
     } catch (requestError) { setError(requestError.message || 'Could not activate this configuration.') } finally { setBusy(false) }
   }
   const loadPreset = async (id) => {
     if (!id) return
+    if (!window.confirm('Loading a preset replaces the current draft configuration in this form, including any changes already saved to the draft. Continue?')) return
     setBusy(true); setError('')
     try {
       const listedPresets = presets.length ? presets : await platformRequest('/config/presets').then((result) => result?.presets || result || [])
@@ -390,12 +409,12 @@ export default function Settings({ config: initialConfig, onActivated }) {
     setConfig(next); setDuplicateOpen(false); setDuplicateName(''); setStatus('Copied these settings into the current company draft. Save and validate before activation; this does not create a separate workspace.')
   }
   const rollback = async (version) => {
-    if (!window.confirm(`Restore configuration version ${version}? This creates a new active version.`)) return
+    if (!window.confirm(`Restore configuration version ${version}? This replaces company settings and the current draft, including unsaved edits, and creates a new active version. Operational records are kept.`)) return
     setBusy(true); setError('')
     try {
-      const result = await platformRequest('/config/rollback', { method: 'POST', body: { data: { version } } })
+      const result = await platformRequest('/config/rollback', { method: 'POST', body: { data: { version, expectedVersion: activeVersion } } })
       const restored = normalizeConfig(result?.config || result)
-      setConfig(restored); setBaseline(restored); setHistoryOpen(false); setStatus(`Rolled back from v${version}`); await refreshHistory(); onActivated?.(restored)
+      setConfig(restored); setBaseline(restored); setActiveConfig(restored); setHistoryOpen(false); setStatus(`Rolled back from v${version}`); await refreshHistory(); onActivated?.(restored)
     } catch (requestError) { setError(requestError.message || 'Could not restore that version.') } finally { setBusy(false) }
   }
   const generateInstance = async () => {
@@ -476,7 +495,14 @@ export default function Settings({ config: initialConfig, onActivated }) {
       <section className="ats-settings-panel"><div className="ats-settings-panel-heading"><div><div className="ats-settings-breadcrumb">{currentSection.group}</div><h2>{currentSection.label}</h2><p>{currentSection.desc}</p></div><div className="ats-settings-section-actions"><button type="button" className="ats-button ats-button--subtle" onClick={resetSection}><RotateCcw size={14} /> Reset section</button><button type="button" className="ats-button ats-button--subtle" onClick={resetAll} disabled={!modified}><RotateCcw size={14} /> Reset all</button></div></div>
         {currentSection.id === 'organization' && <div className="ats-settings-callout"><WandSparkles size={17} /><div><strong>Choose a starting point</strong><span>Presets fill in sensible defaults. Every choice remains editable.</span></div><div className="ats-settings-preset-control"><select aria-label="Starting preset" value={presetId} onChange={(event) => loadPreset(event.target.value)}><option value="">Select a preset</option>{(presets.length ? presets : [{ id: 'startup', name: 'Startup' }, { id: 'corporate', name: 'Corporate' }, { id: 'agency', name: 'Recruitment Agency' }, { id: 'campus', name: 'Campus hiring' }, { id: 'basic', name: 'Basic' }]).map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</select></div></div>}
         {isDisabledModule && <div className="ats-settings-callout is-warning"><AlertTriangle size={17} /><div><strong>This module is switched off</strong><span>Enable it in Modules to make its settings available to users.</span></div><button type="button" className="ats-button ats-button--secondary" onClick={() => { setActiveSection('modules'); setQuery('') }}>Open modules</button></div>}
-        {currentSection.id === 'modules' && <div className="ats-settings-module-grid">{Object.entries(config.modules || {}).filter(([key]) => !(key === 'publicRoles' && Object.hasOwn(config.modules, 'careers'))).map(([key, enabled]) => <label className="ats-settings-module" key={key}><span className="ats-settings-module-icon"><Settings2 size={17} /></span><span><strong>{humanize(key)}</strong><small>{key === 'agency' ? 'Clients, mandates, placement fees and invoices.' : key === 'careers' || key === 'publicRoles' ? 'Public job listings and application forms.' : `Enable ${humanize(key).toLowerCase()} workflows for this workspace.`}</small></span><input type="checkbox" checked={Boolean(enabled)} onChange={(event) => updatePath(`modules.${key}`, event.target.checked)} /></label>)}{!Object.keys(config.modules || {}).some((key) => !(key === 'publicRoles' && Object.hasOwn(config.modules, 'careers'))) && <div className="ats-setting-empty">Module defaults will appear here after selecting a preset.</div>}</div>}
+        {currentSection.id === 'modules' && <div className="ats-settings-module-grid">{Object.entries(config.modules || {}).filter(([key]) => !(key === 'publicRoles' && Object.hasOwn(config.modules, 'careers'))).map(([key, enabled]) => <label className="ats-settings-module" key={key}><span className="ats-settings-module-icon"><Settings2 size={17} /></span><span><strong>{humanize(key)}</strong><small>{key === 'agency' ? 'Clients, mandates, placement fees and invoices.' : key === 'careers' || key === 'publicRoles' ? 'Public job listings and application forms.' : `Enable ${humanize(key).toLowerCase()} workflows for this workspace.`}</small></span><input type="checkbox" checked={Boolean(enabled)} onChange={(event) => {
+          if (event.target.checked) { updatePath(`modules.${key}`, true); return }
+          const next = { ...config, modules: { ...config.modules, [key]: false } }
+          const warnings = getDisabledModuleWarnings(config, next)
+          if (warnings.length && !window.confirm(`${warnings[0].message}\n\nContinue with this draft change?`)) return
+          updatePath(`modules.${key}`, false)
+        }} /></label>)}{!Object.keys(config.modules || {}).some((key) => !(key === 'publicRoles' && Object.hasOwn(config.modules, 'careers'))) && <div className="ats-setting-empty">Module defaults will appear here after selecting a preset.</div>}</div>}
+        {currentSection.id === 'integrations' && <div className="ats-settings-callout is-warning"><AlertTriangle size={17} /><div><strong>External providers are unavailable in this local workspace</strong><span>Email delivery, calendar sync, job boards, HRIS, payments and e-signature are not connected. Configured providers are placeholders; this ATS uses local/mock adapters where available. No external account or hosted service is required.</span></div></div>}
         {currentSection.id === 'terminology' && <div className="ats-settings-terminology-note">Use singular and plural labels. For example, call a job a “Position” and candidates “Applicants.” The labels are shared across navigation, headings and actions.</div>}
         <div className="ats-settings-section-body">
           {currentSection.id === 'data' && hasCanonicalRetention && hasLegacyRetention && <div className="ats-settings-callout ats-settings-legacy-note"><ShieldCheck size={17} /><div><strong>Retention is managed in Privacy &amp; retention</strong><span>The legacy Data Administration value ({config.data.retentionDays} days) is preserved in this configuration but is not active. Update the canonical retention period in Privacy &amp; retention.</span></div><button type="button" className="ats-button ats-button--secondary" onClick={() => setActiveSection('privacy')}>Open Privacy</button></div>}
@@ -524,7 +550,10 @@ export default function Settings({ config: initialConfig, onActivated }) {
       </section>
     </div>
 
-    {reviewOpen && <div className="ats-settings-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReviewOpen(false)}><section className="ats-settings-modal" role="dialog" aria-modal="true" aria-labelledby="ats-review-title"><header><div><span className="ats-settings-modal-icon"><ShieldCheck size={19} /></span><div><h2 id="ats-review-title">Review configuration</h2><p>Validate the draft before making it active for this ATS.</p></div></div><button className="ats-icon-button" type="button" aria-label="Close review" onClick={() => setReviewOpen(false)}><X size={17} /></button></header><div className="ats-settings-modal-body"><div className="ats-review-summary"><span><strong>{config.company?.displayName || config.organization?.name || 'Your company'}</strong><small>Company workspace</small></span><span><strong>{Object.values(config.modules || {}).filter(Boolean).length}</strong><small>Enabled modules</small></span><span><strong>{getSchemaVersion(config)}</strong><small>Schema version</small></span></div>{validation.errors?.length > 0 && <div className="ats-review-messages is-error"><h3><AlertTriangle size={16} /> Fix these issues before activation</h3>{validation.errors.map((item, index) => <p key={index}>{typeof item === 'string' ? item : item.message || item.path && `${item.path}: ${item.message}` || JSON.stringify(item)}</p>)}</div>}{validation.warnings?.length > 0 && <div className="ats-review-messages is-warning"><h3><AlertTriangle size={16} /> Review these recommendations</h3>{validation.warnings.map((item, index) => <p key={index}>{typeof item === 'string' ? item : item.message || item.path && `${item.path}: ${item.message}` || JSON.stringify(item)}</p>)}</div>}{!validation.errors?.length && !validation.warnings?.length && <div className="ats-review-messages is-success"><Check size={16} /> Configuration is valid and ready to activate.</div>}<div className="ats-review-checklist"><h3>Before you activate</h3><p>Users will see enabled modules and configured terminology. Workflow rules and permissions will apply to new actions.</p><label><input type="checkbox" checked={reviewAcknowledged} onChange={(event) => setReviewAcknowledged(event.target.checked)} /> I reviewed this company configuration</label></div></div><footer><button type="button" className="ats-button ats-button--subtle" onClick={() => setReviewOpen(false)}>Continue editing</button><button type="button" className="ats-button ats-button--primary" onClick={activateConfig} disabled={busy || validation.errors?.length > 0 || !reviewAcknowledged}><Check size={15} /> Activate configuration</button></footer></section></div>}
+    {reviewOpen && <div className="ats-settings-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setReviewOpen(false)}><section className="ats-settings-modal" role="dialog" aria-modal="true" aria-labelledby="ats-review-title"><header><div><span className="ats-settings-modal-icon"><ShieldCheck size={19} /></span><div><h2 id="ats-review-title">Review configuration</h2><p>Validate the draft before making it active for this ATS.</p></div></div><button className="ats-icon-button" type="button" aria-label="Close review" onClick={() => setReviewOpen(false)}><X size={17} /></button></header><div className="ats-settings-modal-body"><div className="ats-review-summary"><span><strong>{config.company?.displayName || config.organization?.name || 'Your company'}</strong><small>Company workspace</small></span><span><strong>{Object.values(config.modules || {}).filter(Boolean).length}</strong><small>Enabled modules</small></span><span><strong>{getSchemaVersion(config)}</strong><small>Schema version</small></span></div>{validation.errors?.length > 0 && <div className="ats-review-messages is-error"><h3><AlertTriangle size={16} /> Fix these issues before activation</h3>{validation.errors.map((item, index) => <p key={index}>{typeof item === 'string' ? item : item.message || item.path && `${item.path}: ${item.message}` || JSON.stringify(item)}</p>)}</div>}{validation.warnings?.length > 0 && <div className="ats-review-messages is-warning"><h3><AlertTriangle size={16} /> Review these recommendations</h3>{validation.warnings.map((item, index) => <p key={index}>{typeof item === 'string' ? item : item.message || item.path && `${item.path}: ${item.message}` || JSON.stringify(item)}</p>)}</div>}{!validation.errors?.length && !validation.warnings?.length && <div className="ats-review-messages is-success"><Check size={16} /> Configuration is valid and ready to activate.</div>}
+        <section className="ats-review-diff" aria-label="Active configuration changes"><h3>Active configuration → draft</h3>{activeDiff.length ? <ul>{activeDiff.map((change) => <li key={change.path}><strong>{change.label}</strong><span><del>{change.before}</del><b aria-hidden="true">→</b><ins>{change.after}</ins></span></li>)}</ul> : <p>The draft matches the active configuration.</p>}{activeDiff.length === 60 && <small>Showing the first 60 changes.</small>}</section>
+        {moduleWarnings.length > 0 && <div className="ats-review-messages is-warning"><h3><AlertTriangle size={16} /> Module changes affect existing workflows</h3>{moduleWarnings.map((warning) => <p key={warning.module}>{warning.message}</p>)}</div>}
+        <div className="ats-review-checklist"><h3>Before you activate</h3><p>Users will see enabled modules and configured terminology. Workflow rules and permissions will apply to new actions.</p><label><input type="checkbox" checked={reviewAcknowledged} onChange={(event) => setReviewAcknowledged(event.target.checked)} /> I reviewed this company configuration</label></div></div><footer><button type="button" className="ats-button ats-button--subtle" onClick={() => setReviewOpen(false)}>Continue editing</button><button type="button" className="ats-button ats-button--primary" onClick={activateConfig} disabled={busy || validation.errors?.length > 0 || !reviewAcknowledged}><Check size={15} /> Activate configuration</button></footer></section></div>}
 
     {historyOpen && <div className="ats-settings-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHistoryOpen(false)}><section className="ats-settings-modal ats-settings-history" role="dialog" aria-modal="true" aria-labelledby="ats-history-title"><header><div><span className="ats-settings-modal-icon"><History size={19} /></span><div><h2 id="ats-history-title">Configuration history</h2><p>Review active versions and restore an earlier configuration.</p></div></div><button className="ats-icon-button" type="button" aria-label="Close history" onClick={() => setHistoryOpen(false)}><X size={17} /></button></header><div className="ats-settings-modal-body">{history.length ? history.map((entry) => <article className="ats-history-entry" key={entry.version}><span className="ats-history-marker"><Clock3 size={15} /></span><div><strong>Version {entry.version}{entry.active ? ' · Active' : ''}</strong><small>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Timestamp unavailable'} · {entry.actorId || 'Local administrator'}</small>{entry.note && <p>{entry.note}</p>}</div><button type="button" className="ats-button ats-button--subtle" disabled={busy || entry.active} onClick={() => rollback(entry.version)}><RotateCcw size={14} /> Restore</button></article>) : <div className="ats-setting-empty">No active configuration versions yet. Activate a validated draft to create the first version.</div>}</div><footer><button type="button" className="ats-button ats-button--secondary" onClick={() => setHistoryOpen(false)}>Close</button></footer></section></div>}
 

@@ -350,7 +350,7 @@ All three entity types use short human-readable IDs:
 | `GEMINI_API_KEY_PRIMARY` | ✅ | Primary Gemini API key |
 | `GEMINI_API_KEY_SECONDARY` | ✅ | Secondary Gemini API key (quota failover) |
 | `GEMINI_MODEL` | ✅ | Gemini model name (e.g. `gemini-3.1-flash-lite`) |
-| `FRONTEND_URL` | ✅ | Frontend URL for CORS allowlist (e.g. `https://fyndbridge.vercel.app`) |
+| `FRONTEND_URL` | ✅ | Frontend URL for CORS allowlist (e.g. `http://127.0.0.1:5173` locally) |
 | `PORT` | ❌ | HTTP port (defaults to `4000`) |
 
 ---

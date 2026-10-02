@@ -337,7 +337,7 @@ During local development:
 | `GEMINI_API_KEY_PRIMARY` | Primary Gemini API key |
 | `GEMINI_API_KEY_SECONDARY` | Fallback Gemini API key |
 | `GEMINI_MODEL` | Model name (e.g. `gemini-3.1-flash-lite`) |
-| `FRONTEND_URL` | Frontend origin for CORS (e.g. `https://fyndbridge.vercel.app`) |
+| `FRONTEND_URL` | Frontend origin for CORS (e.g. `http://127.0.0.1:5173` locally) |
 | `PORT` | Server port (default `4000`) |
 
 ---
