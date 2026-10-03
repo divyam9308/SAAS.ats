@@ -15,9 +15,13 @@
     "local": "node scripts/platform-dev.mjs",
     "config:validate": "node builder/validate-config.mjs",
     "test": "node --test config/*.test.js src/**/*.test.js",
-    "test:platform": "node --test builder/*.test.cjs tests/platform.acceptance.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js",
+    "test:platform": "node --test builder/*.test.cjs tests/platform.acceptance.test.cjs tests/configuration-matrix.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js",
     "test:generated": "node scripts/generated-matrix.mjs",
     "test:browser": "node scripts/browser-acceptance.mjs",
+    "test:browser:all": "node scripts/browser-matrix.mjs",
+    "test:performance": "node scripts/performance-acceptance.mjs",
+    "test:soak": "ATS_SOAK_SECONDS=300 node scripts/performance-acceptance.mjs",
+    "test:quality": "npm run test:platform && npm run test:performance && npm run test:browser:all",
     "backup:create": "node scripts/deployment-backup.mjs backup",
     "backup:preview": "node scripts/deployment-backup.mjs preview",
     "backup:restore": "node scripts/deployment-backup.mjs restore --replace",
@@ -37,6 +41,7 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

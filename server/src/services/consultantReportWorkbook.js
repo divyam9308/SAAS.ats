@@ -1,4 +1,7 @@
-const ExcelJS = require('exceljs')
+// Upstream ExcelJS 4.x is effectively unmaintained and still installs several
+// deprecated archive/CSV dependencies. The Ayocore fork keeps the ExcelJS API
+// used by this report while shipping the maintained archive stack.
+const ExcelJS = require('@ayocore/exceljs')
 const { companyConfig } = require('../config/companyConfig')
 const { CANDIDATE_STATUSES } = require('./candidateStatuses')
 

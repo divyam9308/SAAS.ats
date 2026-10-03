@@ -25,9 +25,7 @@ function publicResumeFileFilter(req, file, callback) {
 const publicApplicationUpload = multer({
   dest: '/tmp',
   limits: {
-    // Busboy emits its limit event when a file is exactly equal to fileSize.
-    // One extra byte keeps exactly 1 MiB valid while still rejecting 1 MiB + 1.
-    fileSize: MAX_PUBLIC_RESUME_BYTES + 1,
+    fileSize: MAX_PUBLIC_RESUME_BYTES,
     files: 1,
     fields: 40
   },
@@ -99,4 +97,3 @@ module.exports = {
   validatePublicResume,
   handlePublicUploadErrors
 }
-

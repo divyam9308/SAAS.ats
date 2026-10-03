@@ -5,6 +5,8 @@ import { getConfigDiff, getDisabledModuleWarnings, resolveConfigPath } from './c
 import './Settings.css'
 
 const BUILDER_AVAILABLE = import.meta.env.VITE_BUILDER_AVAILABLE === 'true'
+const PERMISSION_ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export', 'publish', 'assign', 'administer']
+const DATA_SCOPES = ['all', 'organization', 'department', 'location', 'owned']
 
 const SECTIONS = [
   { id: 'organization', label: 'Organization', group: 'Company', path: 'organization', required: true, desc: 'Structure, entities, departments, offices and ownership defaults.' },
@@ -179,6 +181,48 @@ function CollectionEditor({ title, items, path, onChange, hint, keyName = 'name'
       const open = expanded === index
       return <article className={`ats-setting-row ${open ? 'is-open' : ''}`} key={item?.id || `${path}-${index}`}><div className="ats-setting-row-summary"><button type="button" className="ats-setting-row-title" onClick={() => setExpanded(open ? null : index)} aria-expanded={open}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}<span><strong>{name}</strong><small>{item?.description || item?.helpText || `${Object.keys(item || {}).length} configurable properties`}</small></span></button><div className="ats-setting-row-actions"><button type="button" className="ats-icon-button" title="Move up" aria-label={`Move ${name} up`} disabled={!index} onClick={() => { const next = [...list]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(path, next) }}><ArrowUp size={14} /></button><button type="button" className="ats-icon-button" title="Move down" aria-label={`Move ${name} down`} disabled={index === list.length - 1} onClick={() => { const next = [...list]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; onChange(path, next) }}><ArrowDown size={14} /></button><button type="button" className="ats-icon-button danger" title="Remove" aria-label={`Remove ${name}`} onClick={() => { onChange(path, list.filter((_, itemIndex) => itemIndex !== index)); setExpanded(null) }}><Trash2 size={14} /></button></div></div>{open && <div className="ats-setting-row-editor"><ObjectFields value={item} path={`${path}.${index}`} onChange={(childPath, childValue) => patchItem(index, childPath, childValue)} omit={['id', 'createdAt', 'updatedAt']} />{Object.entries(item || {}).filter(([, child]) => Array.isArray(child) && child.length > 0 && child.some((value) => value && typeof value === 'object')).map(([key, values]) => <CollectionEditor key={key} title={humanize(key)} items={values} path={`${path}.${index}.${key}`} onChange={(childPath, childValue) => patchItem(index, childPath, childValue)} />)}</div>}</article>
     })}</div>}</section>
+}
+
+function PermissionMatrixEditor({ roles = [], onChange }) {
+  const [expandedRole, setExpandedRole] = useState(roles[0]?.id || null)
+  const modules = useMemo(() => [...new Set(roles.flatMap((role) => Object.keys(role.permissions || {})))].sort((left, right) => {
+    if (left === '*') return -1
+    if (right === '*') return 1
+    return left.localeCompare(right)
+  }), [roles])
+  const patchRole = (index, patch) => onChange('roles', roles.map((role, roleIndex) => roleIndex === index ? { ...role, ...patch } : role))
+  const togglePermission = (index, module, action, checked) => {
+    const role = roles[index]
+    const permissions = clone(role.permissions || {})
+    const actions = new Set(permissions[module] || [])
+    if (checked) actions.add(action)
+    else actions.delete(action)
+    if (actions.size) permissions[module] = PERMISSION_ACTIONS.filter((item) => actions.has(item))
+    else delete permissions[module]
+    patchRole(index, { permissions })
+  }
+  const addRole = () => {
+    let suffix = roles.length + 1
+    while (roles.some((role) => role.id === `custom-role-${suffix}`)) suffix += 1
+    const role = { id: `custom-role-${suffix}`, name: 'New role', permissions: { dashboard: ['view'] }, scope: 'owned', sensitive: [] }
+    onChange('roles', [...roles, role])
+    setExpandedRole(role.id)
+  }
+  return <section className="ats-permission-editor" aria-labelledby="permission-editor-title">
+    <div className="ats-setting-collection-head"><div><h3 id="permission-editor-title">Role permissions</h3><p>Choose what each role can do and which records it can reach. Server-side authorization uses the same matrix.</p></div><button className="ats-button ats-button--subtle" type="button" onClick={addRole}><Plus size={15} /> Add role</button></div>
+    <div className="ats-permission-role-list">{roles.map((role, index) => {
+      const open = expandedRole === role.id
+      return <article className={`ats-permission-role ${open ? 'is-open' : ''}`} key={role.id || index}>
+        <button className="ats-permission-role-summary" type="button" aria-expanded={open} onClick={() => setExpandedRole(open ? null : role.id)}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}<span><strong>{role.name || role.id}</strong><small>{humanize(role.scope || 'owned')} scope · {Object.values(role.permissions || {}).reduce((total, actions) => total + actions.length, 0)} permissions</small></span></button>
+        {open && <div className="ats-permission-role-body">
+          <div className="ats-permission-basics"><ScalarControl label="Role name" path={`roles.${index}.name`} value={role.name || ''} onChange={(name) => patchRole(index, { name })} required /><label className="ats-setting-control"><span>Data access scope</span><select value={role.scope || 'owned'} onChange={(event) => patchRole(index, { scope: event.target.value })}>{DATA_SCOPES.map((scope) => <option value={scope} key={scope}>{humanize(scope)}</option>)}</select><small>Scope is enforced after the action permission is checked.</small></label></div>
+          <div className="ats-permission-table-wrap"><table className="ats-permission-table"><thead><tr><th scope="col">Area</th>{PERMISSION_ACTIONS.map((action) => <th scope="col" key={action}>{humanize(action)}</th>)}</tr></thead><tbody>{modules.map((module) => <tr key={module}><th scope="row">{module === '*' ? 'All areas' : humanize(module)}</th>{PERMISSION_ACTIONS.map((action) => <td key={action}><input type="checkbox" aria-label={`${role.name || role.id}: ${humanize(module)} ${humanize(action)}`} checked={(role.permissions?.[module] || []).includes(action)} onChange={(event) => togglePermission(index, module, action, event.target.checked)} /></td>)}</tr>)}</tbody></table></div>
+          <ScalarControl label="Sensitive information this role may see" path={`roles.${index}.sensitive`} value={role.sensitive || []} onChange={(sensitive) => patchRole(index, { sensitive })} help="Use business labels such as salary, contact, feedback, private notes, offer details or agency fees." />
+          {role.id !== 'admin' && <button type="button" className="ats-button ats-button--danger" onClick={() => { onChange('roles', roles.filter((_, roleIndex) => roleIndex !== index)); setExpandedRole(null) }}><Trash2 size={14} /> Remove role</button>}
+        </div>}
+      </article>
+    })}</div>
+  </section>
 }
 
 const SECTION_FIELDS = {
@@ -542,7 +586,8 @@ export default function Settings({ config: initialConfig, activeVersion: initial
             return <ScalarControl key={key} path={target} label={FIELD_META[key]?.label || humanize(key)} value={value} help={FIELD_META[key]?.help} required={FIELD_META[key]?.required} onChange={(next) => updateSectionPath(localPath, next)} />
           })}</div>}
           {nestedEntries.map(([key, child]) => <fieldset className="ats-setting-subgroup" key={key}><legend>{humanize(key)}</legend><ObjectFields value={child} path={canonicalPath(currentSection.id, key)} onChange={updateSectionPath} /></fieldset>)}
-          {collections.filter((key) => Array.isArray(sectionObject[key])).map((key) => <CollectionEditor key={key} title={humanize(key)} items={sectionObject[key]} path={canonicalPath(currentSection.id, key)} onChange={updateSectionPath} hint={key === 'pipelines' ? 'Stages and allowed transitions are applied to candidate movement.' : undefined} />)}
+          {currentSection.id === 'access' && Array.isArray(sectionObject.roles) && <PermissionMatrixEditor roles={sectionObject.roles} onChange={updateSectionPath} />}
+          {collections.filter((key) => Array.isArray(sectionObject[key]) && !(currentSection.id === 'access' && key === 'roles')).map((key) => <CollectionEditor key={key} title={humanize(key)} items={sectionObject[key]} path={canonicalPath(currentSection.id, key)} onChange={updateSectionPath} hint={key === 'pipelines' ? 'Stages and allowed transitions are applied to candidate movement.' : undefined} />)}
           {currentSection.id === 'terminology' && Object.entries(sectionObject).filter(([, value]) => value && typeof value === 'object' && !Array.isArray(value)).map(([key, value]) => <fieldset className="ats-setting-subgroup ats-terminology-group" key={key}><legend>{humanize(key)}</legend><div className="ats-setting-fields">{['singular', 'plural'].filter((label) => value[label] !== undefined).map((label) => <ScalarControl key={label} path={`terminology.${key}.${label}`} label={humanize(label)} value={value[label]} onChange={(next) => updateSectionPath(`terminology.${key}.${label}`, next)} />)}</div></fieldset>)}
           {scalarEntries.length === 0 && nestedEntries.length === 0 && collections.length === 0 && currentSection.id !== 'modules' && <div className="ats-settings-empty-state"><span><Settings2 size={21} /></span><h3>Start configuring {currentSection.label.toLowerCase()}</h3><p>Use a preset to add starter settings, or create your first item below.</p>{currentSection.id === 'agency' && <p>Agency controls appear only when the agency module is enabled.</p>}</div>}
         </div>

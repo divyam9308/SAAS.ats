@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync, backup: sqliteBackup } = require('node:sqlite');
-const { acquirePlatformRuntimeLock } = require('./runtime-lock');
+const { acquirePlatformRuntimeLock, isTrustedSystemAlias } = require('./runtime-lock');
 
 const FORMAT = 'ats-local-backup';
 const VERSION = 1;
@@ -69,7 +69,8 @@ function ensureNoSymlinkAncestors(p) {
   for (const part of resolved.slice(current.length).split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
     if (!exists(current)) break;
-    if (fs.lstatSync(current).isSymbolicLink()) throw new BackupError(`Path contains a symlink: ${current}`);
+    const stats = fs.lstatSync(current);
+    if (stats.isSymbolicLink() && !isTrustedSystemAlias(current, stats)) throw new BackupError(`Path contains a symlink: ${current}`);
   }
 }
 

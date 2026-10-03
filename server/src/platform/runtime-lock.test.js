@@ -36,6 +36,17 @@ test('stale or malformed locks fail closed without unlinking them', t => {
   assert.equal(fs.readFileSync(lockPath, 'utf8'), 'not-json');
 });
 
+test('macOS system temp aliases are accepted without trusting nested symlinks', { skip: process.platform !== 'darwin' }, t => {
+  const root = fs.mkdtempSync('/tmp/ats-runtime-lock-');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const dbPath = path.join(root, 'platform.sqlite');
+  assert.doesNotThrow(() => acquirePlatformRuntimeLock(dbPath)());
+
+  const real = path.join(root, 'real'); fs.mkdirSync(real);
+  const link = path.join(root, 'linked'); fs.symlinkSync(real, link, 'dir');
+  assert.throws(() => acquirePlatformRuntimeLock(path.join(link, 'platform.sqlite')), /symlink/);
+});
+
 test('lock acquisition refuses symlinked ancestors before creating a marker', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-runtime-lock-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

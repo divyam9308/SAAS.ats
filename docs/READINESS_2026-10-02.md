@@ -2,6 +2,12 @@
 
 The requested local readiness pass is complete. This report supersedes the paused `CHECKPOINT_2026-10-02.md`. Source: `/workspace/SAAS.ats`, branch `main`, base `c65d2c899d9684175225bfe07c0972338fd2d753`. Verification completed before publication; the user explicitly authorized committing and pushing this pass on 2026-10-02. The user's Mac checkout was not accessed, and the original Fyndbridge repository was not modified.
 
+## macOS follow-up — 2026-10-04
+
+The published commit was subsequently pulled into the user's Mac checkout and verified with Node 26.4.0. A macOS portability defect in runtime/backup symlink checks was fixed without weakening nested-symlink rejection, a late record-drawer race in the Chromium workflow was made deterministic, Multer was upgraded to 2.4.0 with its exact one-MiB boundary retained, and the legacy Supabase session lookup was split behind a lazy adapter so the production build no longer emits the mixed static/dynamic import warning.
+
+Normal commands now pass without a `TMPDIR` override: 30 frontend tests, 272 platform tests, 913 server tests, 21 Chromium checks, and 260 tests in each generated corporate/agency/startup workspace. The generated matrix also passed 6 installs, 3 builds, 4 API starts, 31 runtime/backup assertions, and 9 backup CLI commands. Lint, build, config validation, root/server audits, and `git diff --check` passed. See `docs/ATS_ACCEPTANCE.md` for the exact follow-up ledger.
+
 ## Delivered changes
 
 - Settings protect dirty edits during navigation, user switching and browser unload. Presets, module changes, activation and rollback require appropriate confirmation. Activation presents a readable item-level diff and acknowledgment, validates server-side and rejects stale draft/version writes. Rollback uses the same transactional activation boundary.
@@ -38,7 +44,7 @@ Node 24.19.0 was used; Node >=22.13 is required and Node 24 is recommended. All 
 | `ATS_BROWSER_EXECUTABLE=/tmp/ats-chromium npm run test:browser` | 21 real Chromium browser checks passed; no captured page/console errors |
 | `git diff --check` | Passed |
 
-The production build emits one nonblocking legacy Supabase mixed static/dynamic import warning. No Supabase service is required for the configured local platform. The environment also emits an npm proxy configuration warning; it did not fail installation or audits.
+The original cloud production build emitted one nonblocking legacy Supabase mixed static/dynamic import warning. The 2026-10-04 Mac follow-up removed that warning while preserving lazy public boot. No Supabase service is required for the configured local platform.
 
 ### Actual browser acceptance
 
@@ -98,7 +104,7 @@ Buyer review: tested company differences apply to navigation, terminology, brand
 
 Source inspection found no tracked/pending database, upload, generated-output or dependency-cache artifacts; no credential-pattern matches or persisted resume-byte duplication were found. Public login-copy exposure identified during review was removed and regression-tested. This targeted review is not an independent penetration test or legal-compliance certification.
 
-Engineering estimate: approximately **95% readiness for this isolated local development/testing product**, not a measured completion percentage across all 50 original buyer areas. The requested readiness pass is complete; deeper business-friendly advanced editors and exact-page previews, uncommon workflow variants, Safari/Firefox, exhaustive accessibility, performance/load and large-data behavior remain areas for further product validation. The user's Mac has not been tested from this environment.
+Engineering estimate: approximately **95% readiness for this isolated local development/testing product**, not a measured completion percentage across all 50 original buyer areas. The requested readiness pass is complete; deeper business-friendly advanced editors and exact-page previews, uncommon workflow variants, Safari/Firefox, exhaustive accessibility, performance/load and large-data behavior remain areas for further product validation. The user's Mac was verified in the 2026-10-04 follow-up above.
 
 Authentication/user switching, email/outbox, calendar behavior and external payment/provider behavior are intentionally mocked. Integration categories without adapters are explicitly unavailable. EICAR handling is a local scanner mock, not production antivirus. A real hosted offering still needs decisions and implementation for identity/session lifecycle, provider credentials and delivery reliability, tenancy/fleet provisioning, billing, hosted storage/backups/disaster recovery, operations/security review and legal requirements. No Supabase, Vercel, paid providers or real OAuth were added.
 

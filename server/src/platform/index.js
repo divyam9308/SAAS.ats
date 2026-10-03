@@ -162,6 +162,12 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   }) });
   const visibleRecord = (req, kind, row) => masked(req, projectRecordLabels(kind, kind === 'talentPools' ? projectPool(req, row) : row, { get: (linkedKind, id) => store.get(linkedKind, id), canView: linkedKind => moduleEnabled(req.config, linkedKind) && hasPermission(req.actor, `${linkedKind}:view`, req.config), readable: (linkedKind, linked) => readable(req, linked, linkedKind), users: req.localsUsers }));
   const visibleList = (req, kind) => store.list(kind).filter(row => readable(req, row, kind)).map(row => visibleRecord(req, kind, row));
+  const visibleCount = (req, kind) => {
+    const role = req.config.roles?.find(item => item.id === req.actor.roleId);
+    // An all-scope count needs no record materialization or label projection.
+    // Scoped roles still use the exact row-level predicate so counts cannot leak.
+    return !['owned', 'assigned', 'department', 'location'].includes(role?.scope) ? store.count(kind) : visibleList(req, kind).length;
+  };
   const noteParent = note => {
     const kind = note.relatedKind || (note.candidateId ? 'candidates' : note.jobId ? 'jobs' : note.applicationId ? 'applications' : note.clientId ? 'clients' : note.offerId ? 'offers' : null);
     const id = note.relatedId || note.candidateId || note.jobId || note.applicationId || note.clientId || note.offerId;
@@ -601,7 +607,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       interviewPlans: configData.interviewPlans, jobTemplates: configData.jobTemplates, taxonomies: configData.taxonomies,
       roles: [actorRole], users: visibleUsers
     };
-    const countObj = Object.fromEntries(RECORD_KINDS.map(kind => [kind, visibleList(req, kind).length]));
+    const countObj = Object.fromEntries(RECORD_KINDS.map(kind => [kind, visibleCount(req, kind)]));
     send(res, { config: clientConfig, configVersion: cfgRow().active_version, capabilities: CAPABILITIES, user: req.actor, users: visibleUsers, modules: configData.modules, counts: countObj, role: actorRole });
   });
   router.get('/records/:kind', (req, res) => {
@@ -1033,7 +1039,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   router.get('/dashboard', (req, res) => {
     if (!permitted(req, res, 'dashboard', 'view')) return;
     const metrics = scopedMetrics(req);
-    const counts = Object.fromEntries(RECORD_KINDS.map(k => [k, visibleList(req, k).length]));
+    const counts = Object.fromEntries(RECORD_KINDS.map(k => [k, visibleCount(req, k)]));
     send(res, { ...metrics, counts, pendingApprovals: visibleList(req, 'requisitions').filter(x => ['pending', 'in_review'].includes(x.status)).length });
   });
   router.get('/search', (req, res) => {
@@ -1361,7 +1367,13 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   return router;
 
   function scopedMetrics(req) {
-    const recordsByKind = Object.fromEntries(RECORD_KINDS.map(kind => [kind, store.list(kind)]));
+    const metricKinds = ['jobs', 'applications', 'offers', 'interviews', 'tasks', 'placements', 'referrals', 'workforceTargets', 'invoices', 'submissions'];
+    const recordsByKind = Object.fromEntries(metricKinds.map(kind => [kind, store.list(kind)]));
+    // Candidate rows are used only to resolve a missing application source.
+    // Loading an unrelated large talent database for every dashboard request is
+    // unnecessary, so resolve only candidates referenced by live applications.
+    const candidateIds = new Set(recordsByKind.applications.map(row => row.candidateId).filter(Boolean));
+    recordsByKind.candidates = candidateIds.size ? store.list('candidates').filter(row => candidateIds.has(row.id)) : [];
     return computePlatformMetrics({ recordsByKind, config: req.config, actor: req.actor, scopeRecord: (kind, record) => readable(req, record, kind) });
   }
 }

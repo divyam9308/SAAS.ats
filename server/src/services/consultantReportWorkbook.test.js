@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const ExcelJS = require('exceljs')
+const ExcelJS = require('@ayocore/exceljs')
 const { companyConfig } = require('../config/companyConfig')
 const { CANDIDATE_STATUSES } = require('./candidateStatuses')
 const { buildConsultantReportWorkbook } = require('./consultantReportWorkbook')

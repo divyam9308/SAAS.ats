@@ -10,6 +10,26 @@ This ledger tracks the requested local SaaS platform expansion. A configuration 
 - External email, calendars, payments and identity providers must remain mock adapters.
 - Platform capabilities, company configuration and operational records must remain separate.
 
+## macOS portability and first-run browser hardening — 2026-10-04
+
+The published readiness commit was verified again on the user's Apple Silicon Mac with Node 26.4.0. The platform runtime and backup path checks now recognize only macOS's root-owned `/var -> /private/var` and `/tmp -> /private/tmp` aliases while continuing to reject nested or customer-controlled symlinks. The Chromium corporate flow also recovers when an asynchronously rendered record drawer briefly blocks navigation. Multer was upgraded to 2.4.0, the exact 1 MiB public-resume boundary remains covered, and the legacy Supabase session lookup retains lazy public boot without the prior mixed-import build warning.
+
+| Exact command | Mac result |
+| --- | --- |
+| `npm test` | 30 passed, 0 failed/skipped |
+| `npm run test:platform` | 272 passed, 0 failed/skipped |
+| `npm --prefix server test` | 913 passed, 0 failed/skipped |
+| `npm run lint` | Passed |
+| `npm run build` | Passed without the prior mixed static/dynamic import warning |
+| `npm run config:validate` | Corporate default schema v2 valid |
+| `npm audit` | 0 vulnerabilities |
+| `npm --prefix server audit` | 0 vulnerabilities |
+| `npm run test:browser` | 21 Chromium checks passed on the first post-fix run |
+| `npm run test:generated` | Corporate/agency/startup: 260 tests each; 6 installs, 3 builds, 4 API starts, 31 runtime/backup assertions, 9 backup CLI commands |
+| `git diff --check` | Passed |
+
+These commands use the normal macOS temporary directory; no `TMPDIR` override is required. The browser scope remains representative rather than exhaustive Safari/Firefox, accessibility, load, or every original buyer-setting coverage.
+
 ## Final local readiness verification — 2026-10-02
 
 The final integrated pass supersedes the paused [checkpoint](CHECKPOINT_2026-10-02.md) and historical browser-blocked notes below. See [READINESS_2026-10-02.md](READINESS_2026-10-02.md) for files, architecture, subagent models, flows and setup instructions. All commands below exited successfully on Node 24.19.0 in the cloud checkout before publication. The user subsequently authorized committing and pushing this pass.

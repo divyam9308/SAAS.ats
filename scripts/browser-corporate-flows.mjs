@@ -14,18 +14,24 @@ export async function verifyCorporateWorkflow({ page, api, check }) {
   assert.ok(applicantLabel, 'Public applicant should have a display name')
   const modal = () => page.locator('.platform-modal[role="dialog"]')
   const namedControl = (container, name) => container.locator(`[name="${name}"]`)
-  const clickNav = async (name) => {
-    await closeDetails()
-    await page.locator('.platform-nav-link').filter({ hasText: new RegExp(`^${name}$`) }).click()
-  }
-  const rowFor = (text) => page.locator('.platform-table tbody tr').filter({ hasText: text }).first()
   const closeDetails = async () => {
     const drawer = page.locator('.platform-record-drawer')
-    if (await drawer.count()) {
+    if (await drawer.isVisible().catch(() => false)) {
       await drawer.getByRole('button', { name: 'Close details', exact: true }).click()
       await drawer.waitFor({ state: 'hidden' })
     }
   }
+  const clickNav = async (name) => {
+    await closeDetails()
+    const target = page.locator('.platform-nav-link').filter({ hasText: new RegExp(`^${name}$`) })
+    try { await target.click({ timeout: 2_000 }) }
+    catch (error) {
+      if (!await page.locator('.platform-drawer-backdrop').isVisible().catch(() => false)) throw error
+      await closeDetails()
+      await target.click()
+    }
+  }
+  const rowFor = (text) => page.locator('.platform-table tbody tr').filter({ hasText: text }).first()
   const selectFirst = async (container, name) => {
     const select = namedControl(container, name)
     const options = await select.locator('option').evaluateAll(items => items.filter(option => option.value).map(option => option.value))

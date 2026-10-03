@@ -1,7 +1,7 @@
 # SaaS ATS / ATS Generator — Complete Project Context and Handoff
 
-**Latest verified readiness pass:** 2026-10-02 — read `docs/READINESS_2026-10-02.md` first. It supersedes the paused verification status in `docs/CHECKPOINT_2026-10-02.md` and older sections below. The user explicitly authorized committing and pushing this pass to `divyam9308/SAAS.ats` on 2026-10-02. Verify the current Git state when resuming; these changes have not been installed on the user's Mac.
-**Current cloud working directory:** `/workspace/SAAS.ats` (Git `main`, base `c65d2c8`; readiness changes are uncommitted).
+**Latest verified readiness pass:** 2026-10-04 — read the macOS follow-up in `docs/READINESS_2026-10-02.md` and the latest section of `docs/ATS_ACCEPTANCE.md` first. It supersedes the paused verification status in `docs/CHECKPOINT_2026-10-02.md` and older sections below. The 2026-10-02 readiness pass was committed as `9dbd063`; the 2026-10-04 macOS portability fixes are local until the user explicitly requests a commit/push.
+**Current working directory:** `/Users/divyamaggarwal/Desktop/files/ATS PUBLIC VERSION/SAAS.ats` (Git `main`, base `9dbd063` plus the uncommitted macOS follow-up).
 **Purpose of this file:** Give a new VS Code/Codex/AI session enough accurate context to continue this project without relying on the old chat history.
 
 ---
@@ -23,7 +23,7 @@ The current phase is deliberately local:
 - Do not require paid email, calendar, payments, job board, e-signature, or other integrations.
 - Keep clean interfaces around persistence, authentication, communications, calendars, storage, and integrations so hosted providers can replace local adapters later.
 
-This checkout contains a working isolated local platform, but it must **not** be described as a fully production-deployed SaaS. The final readiness run passed 271 platform tests, 912 server tests, 30 frontend tests, 21 actual Chromium browser checks, and the corporate/agency/startup generated matrix (259 tests each). Lint, build, config validation and root/server audits passed. Older checkpoints below are historical; the latest readiness report is authoritative. Browser coverage is representative, not exhaustive coverage of all 50 original buyer areas.
+This checkout contains a working isolated local platform, but it must **not** be described as a fully production-deployed SaaS. The macOS follow-up passed 272 platform tests, 913 server tests, 30 frontend tests, 21 actual Chromium browser checks, and the corporate/agency/startup generated matrix (260 tests each). Lint, build, config validation and root/server audits passed. Older checkpoints below are historical; the latest readiness report is authoritative. Browser coverage is representative, not exhaustive coverage of all 50 original buyer areas.
 
 ---
 
@@ -32,7 +32,7 @@ This checkout contains a working isolated local platform, but it must **not** be
 1. **Never modify, commit to, push to, or otherwise alter the original Fyndbridge ATS repository** (`divyam9308/fyndbridge-ats`). It may only be used as a reference.
 2. All implementation belongs in the SaaS ATS/generator project (`divyam9308/SAAS.ats`) or this current extracted working directory.
 3. Before editing, run `pwd` and inspect for Git metadata so the active repository is unambiguous.
-4. The current cloud directory is a Git worktree cloned from `divyam9308/SAAS.ats`, branch `main`, base commit `c65d2c8`. Readiness changes are uncommitted and unpushed. The user's Mac checkout and its unrelated changes are not accessible from this environment.
+4. The current Mac directory is a Git worktree cloned from `divyam9308/SAAS.ats`, branch `main`, base commit `9dbd063`. Always inspect the live Git state because the macOS follow-up may still be uncommitted.
 5. Do not push automatically. The user must explicitly request a push.
 6. Do not commit dependency caches, build output, local databases, uploaded test files, browser artifacts, secrets, or generated junk.
 7. Preserve unrelated user changes. Avoid destructive Git or filesystem operations.
@@ -405,7 +405,7 @@ Result: passed with exit code 0.
 npm run build
 ```
 
-Result: passed. The build still reports a known mixed static/dynamic import warning around the legacy Supabase client; it is not a build failure.
+Result: passed. The 2026-10-04 follow-up removed the former mixed static/dynamic import warning while preserving lazy public-route boot.
 
 ```bash
 npm run config:validate
@@ -427,11 +427,11 @@ Do not silently treat that older matrix as a newly rerun result. Rerun the gener
 
 ## 9. Browser acceptance status
 
-**Representative local Chromium acceptance passed on 2026-10-02: 21 checks.** See `docs/READINESS_2026-10-02.md` for exercised routes and workflows. Corporate and agency journeys ran through the real UI; three independently generated presets passed install/build/API/backup checks. Safari, the user's Mac, exhaustive accessibility and every original buyer setting have not been browser-tested.
+**Representative local Chromium acceptance passed again on the user's Mac on 2026-10-04: 21 checks.** See `docs/READINESS_2026-10-02.md` for exercised routes and workflows. Corporate and agency journeys ran through the real UI; three independently generated presets passed install/build/API/backup checks. Safari/Firefox, exhaustive accessibility and every original buyer setting have not been browser-tested.
 
 The earlier managed-browser localhost block and broken binaries are historical. A functioning local Playwright/Chromium harness now starts the UI, API and Builder together and exercises actual navigation, forms, downloads and mock-user permissions. API tests and builds remain separate evidence.
 
-The macOS “buttons/page could not be displayed” issue was traced to the Vite proxy using `localhost:4000` while the API was bound to IPv4. The default proxy now uses `http://127.0.0.1:4000`, and a regression test proves it. This fix still needs real user-machine browser confirmation.
+The macOS “buttons/page could not be displayed” issue was traced to the Vite proxy using `localhost:4000` while the API was bound to IPv4. The default proxy now uses `http://127.0.0.1:4000`, and a regression test proves it. This fix was confirmed by the real Mac browser harness on 2026-10-04.
 
 The original interactive acceptance checklist (consult the latest report for exact coverage; do not infer every variation was exercised):
 
@@ -461,7 +461,7 @@ The original interactive acceptance checklist (consult the latest report for exa
 
 ### Highest priority
 
-1. **Maintain and broaden the passing browser suite.** The requested local readiness flows now pass. Confirm the patch on the user's Mac and extend cross-browser, keyboard/accessibility and less common workflow variants without claiming the current representative suite covers every original requirement.
+1. **Maintain and broaden the passing browser suite.** The requested local readiness flows pass on the user's Mac. Extend cross-browser, keyboard/accessibility and less common workflow variants without claiming the current representative suite covers every original requirement.
 2. **Finish buyer-grade configurator depth.** The guided top-level flow is polished and progressive, but many advanced settings still depend on the in-app Settings/schema editing experience. Build focused business-friendly editors for the important deep areas instead of exposing raw JSON or giant generic forms.
 3. **Make the live preview cover more of the ATS.** It currently demonstrates key pages/settings. Extend it so a buyer can preview the exact page/feature being configured—forms, candidate profile, scorecards, communications, offers, careers detail/application, agency screens, etc.—without pretending draft preview writes operational data.
 4. **Perform a hard-coded-string/list audit.** Centralize remaining terminology, statuses, taxonomies, employment types, sources, document categories, priorities, and reasons wherever company configuration should control them.

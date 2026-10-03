@@ -20,8 +20,8 @@ const isPrivateApiUrl = (value) => {
 }
 
 export async function getAccessToken() {
-  const { supabase } = await import('./supabaseClient')
-  return supabase ? (await supabase.auth.getSession()).data.session?.access_token || '' : ''
+  const { getSupabaseAccessToken } = await import('./supabaseSession')
+  return getSupabaseAccessToken()
 }
 
 export async function authHeaders(existing = undefined) {
@@ -305,4 +305,3 @@ export async function openProtectedDocumentPath(type, path, options = {}) {
 }
 
 export { API_INACTIVE_EVENT, API_UNAUTHORIZED_EVENT }
-

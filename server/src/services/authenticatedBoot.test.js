@@ -8,6 +8,7 @@ const app = fs.readFileSync(path.join(root, 'src/App.jsx'), 'utf8')
 const auth = fs.readFileSync(path.join(root, 'src/context/AuthContext.jsx'), 'utf8')
 const preload = fs.readFileSync(path.join(root, 'src/utils/routePreload.js'), 'utf8')
 const apiClient = fs.readFileSync(path.join(root, 'src/services/apiClient.js'), 'utf8')
+const supabaseSession = fs.readFileSync(path.join(root, 'src/services/supabaseSession.js'), 'utf8')
 
 test('authenticated reload shares one shell loader between preload and React lazy', () => {
   assert.match(preload, /export function loadAuthenticatedShell\(\)/)
@@ -44,7 +45,8 @@ test('public open roles tree is structurally outside authenticated providers and
 
 test('public boot does not statically initialize Supabase or attach authenticated API headers', () => {
   assert.doesNotMatch(apiClient, /^import .*supabaseClient/m)
-  assert.match(apiClient, /await import\('\.\/supabaseClient'\)/)
+  assert.match(apiClient, /await import\('\.\/supabaseSession'\)/)
+  assert.match(supabaseSession, /^import .*supabaseClient/m)
   assert.match(apiClient, /text === '\/api\/public' \|\| text\.startsWith\('\/api\/public\/'\)/)
 })
 

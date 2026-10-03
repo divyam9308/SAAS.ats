@@ -37,6 +37,7 @@ let presetConfig = null
 let config = null
 let stepIndex = 0
 let selectedPreviewPage = 'auto'
+let selectedPreviewVariant = 'auto'
 
 const slugify = value => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
 const escapeHtml = value => String(value ?? '').replace(/[&<>"]/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[character])
@@ -164,6 +165,41 @@ function previewPageForStep() {
   return ['dashboard', 'dashboard', 'jobs', 'dashboard', 'pipeline', 'dashboard'][stepIndex] || 'dashboard'
 }
 
+function previewVariants(page) {
+  const sources = {
+    jobs: config.jobTemplates,
+    application: config.applicationForms,
+    pipeline: config.pipelines,
+    scorecards: config.scorecards,
+    requisitions: (config.approvalWorkflows || []).filter(item => item.module === 'requisitions'),
+    offers: (config.approvalWorkflows || []).filter(item => item.module === 'offers'),
+    onboarding: config.onboardingTemplates,
+    communications: config.communicationTemplates,
+    automation: config.automations,
+  }
+  return (sources[page] || []).map((item, index) => ({ id: String(item.id || index), label: item.name || item.title || item.subject || `${humanizePreview(page)} ${index + 1}`, item }))
+}
+
+function humanizePreview(value) {
+  return String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, letter => letter.toUpperCase())
+}
+
+function selectPreviewVariant(page) {
+  const options = previewVariants(page)
+  const label = $('#preview-variant-label')
+  const selector = $('#preview-variant')
+  if (!label || !selector) return null
+  label.classList.toggle('hidden', options.length < 2)
+  if (!options.length) {
+    selector.innerHTML = ''
+    selectedPreviewVariant = 'auto'
+    return null
+  }
+  if (!options.some(option => option.id === selectedPreviewVariant)) selectedPreviewVariant = options[0].id
+  selector.innerHTML = options.map(option => `<option value="${escapeHtml(option.id)}" ${option.id === selectedPreviewVariant ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')
+  return options.find(option => option.id === selectedPreviewVariant)?.item || options[0].item
+}
+
 function renderPreview() {
   const node = $('#preview-frame')
   if (!node || !config) return
@@ -192,15 +228,17 @@ function renderPreview() {
   const money = new Intl.NumberFormat('en', { style:'currency', currency:safeCurrency, maximumFractionDigits:0 }).format(safeCurrency === 'INR' ? 1850000 : 85000)
   const nav = [
     ['dashboard', 'Overview', true], ['jobs', terms.jobs, normalized.jobs], ['candidates', terms.candidates, normalized.candidates],
-    ['pipeline', 'Pipeline', normalized.pipeline], ['requisitions', 'Hiring requests', modules.requisitions],
-    ['offers', 'Offers', modules.offers], ['onboarding', 'Onboarding', modules.onboarding],
+    ['candidateProfile', `${terms.candidates.replace(/s$/i, '')} profile`, normalized.candidates], ['pipeline', 'Pipeline', normalized.pipeline], ['application', 'Application forms', normalized.careers], ['requisitions', 'Hiring requests', modules.requisitions],
+    ['scorecards', 'Scorecards', true], ['offers', 'Offers', modules.offers], ['onboarding', 'Onboarding', modules.onboarding],
+    ['communications', 'Communications', true],
     ['referrals', 'Referrals', modules.referrals], ['talentCrm', 'Talent pools', modules.talentCrm],
     ['workforcePlanning', 'Workforce plan', modules.workforcePlanning], ['automation', 'Automations', modules.automation],
-    ['clients', terms.clients, modules.agency], ['invoices', 'Invoices', modules.invoices], ['careers', 'Careers', normalized.careers],
+    ['clients', terms.clients, modules.agency], ['submissions', 'Submissions', modules.agency], ['placements', 'Placements', modules.agency], ['invoices', 'Invoices', modules.invoices], ['careers', 'Careers', normalized.careers],
   ].filter(([, , enabled]) => enabled)
-  const titles = { dashboard:'Hiring overview', jobs:terms.jobs, candidates:terms.candidates, pipeline:'Hiring pipeline', careers:`Careers at ${company}`, requisitions:'Hiring requests', offers:'Offers', onboarding:'Onboarding', referrals:'Employee referrals', talentCrm:'Talent pools', workforcePlanning:'Workforce plan', automation:'Automation rules', clients:terms.clients, invoices:'Invoices' }
+  const titles = { dashboard:'Hiring overview', jobs:terms.jobs, application:'Application form', candidates:terms.candidates, candidateProfile:`${terms.candidates.replace(/s$/i, '')} profile`, pipeline:'Hiring pipeline', careers:`Careers at ${company}`, requisitions:'Hiring requests', scorecards:'Interview scorecards', offers:'Offers', onboarding:'Onboarding', communications:'Communications', referrals:'Employee referrals', talentCrm:'Talent pools', workforcePlanning:'Workforce plan', automation:'Automation rules', clients:terms.clients, submissions:'Candidate submissions', placements:'Placements', invoices:'Invoices' }
   const activeLabel = titles[page] || titles.dashboard
-  const content = previewContent(page, { terms, currency, money, today, dateFormat, timeZone, company, accent, sampleTime })
+  const variant = selectPreviewVariant(page)
+  const content = previewContent(page, { terms, currency, money, today, dateFormat, timeZone, company, accent, sampleTime, variant })
   node.dataset.page = page
   node.style.setProperty('--preview-primary', primary)
   node.style.setProperty('--preview-accent', accent)
@@ -241,7 +279,7 @@ function formatPreviewTime(format, zone) {
 }
 
 function previewContent(page, data) {
-  const { terms, money, today, dateFormat, timeZone, company, accent, sampleTime } = data
+  const { terms, money, today, timeZone, company, sampleTime, variant } = data
   if (page === 'careers') return `<section class="career-hero"><small>CAREERS · ${escapeHtml(company.toUpperCase())}</small><h4>Do work that moves people forward.</h4><p>Find a role where your next chapter can start.</p><span class="mock-add">Explore open roles</span></section><div class="mock-list"><strong>Featured opportunities</strong><article><span><b>Senior Product Designer</b><small>Product · Hybrid</small></span><span>Patiala</span></article><article><span><b>Talent Acquisition Partner</b><small>People · Full-time</small></span><span>Remote</span></article></div>`
   if (page === 'pipeline') {
     const stages = config.pipelines?.[0]?.stages || []
@@ -252,10 +290,61 @@ function previewContent(page, data) {
     const isJobs = page === 'jobs'
     return `<div class="mock-stats"><article><small>${isJobs ? 'OPEN' : 'NEW THIS MONTH'}</small><strong>${isJobs ? '12' : '48'}</strong></article><article><small>${isJobs ? 'IN REVIEW' : 'IN PROCESS'}</small><strong>${isJobs ? '4' : '126'}</strong></article><article><small>${isJobs ? 'HIRES YTD' : 'RESPONSE RATE'}</small><strong>${isJobs ? '8' : '72%'}</strong></article></div><div class="mock-list"><div class="mock-list-heading"><strong>${escapeHtml(isJobs ? terms.jobs : terms.candidates)}</strong><small>Updated · ${escapeHtml(today)}</small></div>${isJobs ? `<article><span><b>Senior Software Engineer</b><small>Engineering · Full-time</small></span><span>${escapeHtml(money)}</span><i class="mock-status">Hiring</i></article><article><span><b>Growth Marketing Lead</b><small>Marketing · Hybrid</small></span><span>${escapeHtml(money)}</span><i class="mock-status">New</i></article>` : `<article><span><b>Maya Chen</b><small>Product Designer · Referral</small></span><span>Interview · ${escapeHtml(today)}</span><i class="mock-status">Active</i></article><article><span><b>Arjun Mehta</b><small>Software Engineer · Careers</small></span><span>Screening · ${escapeHtml(today)}</span><i class="mock-status">Active</i></article>`}</div>`
   }
-  return `<div class="mock-stats"><article><small>OPEN ${escapeHtml(terms.jobs.toUpperCase())}</small><strong>12</strong><span>Across 4 departments</span></article><article><small>ACTIVE ${escapeHtml(terms.candidates.toUpperCase())}</small><strong>126</strong><span>+18 this month</span></article><article><small>AVERAGE TIME TO HIRE</small><strong>24 days</strong><span>↓ 3 days this quarter</span></article></div><div class="mock-chart"><div><strong>Hiring progress</strong><small>Current quarter</small></div><div class="chart-bars" aria-label="Sample hiring trend">${[40,62,48,76,58,88,67,100,77,92,72,83].map((height,index) => `<i style="height:${height}%;opacity:${.4+index*.05}"></i>`).join('')}</div><div class="chart-legend"><span>Target 18 hires</span><b>12 / 18</b></div></div><div class="mock-list"><div class="mock-list-heading"><strong>Upcoming interviews</strong><small>${escapeHtml(timeZone)} · ${escapeHtml(today)}</small></div><article><span><b>Maya Chen · Product Designer</b><small>Panel interview · Product team</small></span><span>${escapeHtml(today)} · ${escapeHtml(sampleTime)}</span><i class="mock-status">Confirmed</i></article><article><span><b>Arjun Mehta · Software Engineer</b><small>Technical round · Engineering</small></span><span>${escapeHtml(today)} · ${escapeHtml(sampleTime)}</span><i class="mock-status">Feedback due</i></article></div>`
+  if (page === 'application') {
+    const form = variant || config.applicationForms?.[0] || { name:'Application form', sections:[] }
+    const sections = form.sections || []
+    return `<div class="mock-form"><div class="mock-form-title"><strong>${escapeHtml(form.name || 'Application form')}</strong><small>${escapeHtml(form.language || 'en').toUpperCase()} · ${sections.length} section${sections.length === 1 ? '' : 's'}</small></div>${sections.map(section => `<section><h4>${escapeHtml(section.title || section.name || 'Questions')}</h4>${(section.fields || []).map(field => `<label><span>${escapeHtml(field.label || field.field || field.key)}${field.required ? ' *' : ''}</span><i>${escapeHtml(humanizePreview(field.type || 'short text'))}</i></label>`).join('') || '<small>No fields configured</small>'}</section>`).join('') || '<div class="mock-empty">No application sections configured.</div>'}<button type="button">${escapeHtml(config.careers?.copy?.submit || 'Submit application')}</button></div>`
+  }
+  if (page === 'candidateProfile') return `<div class="mock-profile"><div class="mock-profile-head"><i>MC</i><span><strong>Maya Chen</strong><small>Product Designer · Active</small></span></div><div class="mock-profile-grid"><article><small>CONTACT</small><b>maya@example.test</b><span>+1 555 010 2040</span></article><article><small>CURRENT STAGE</small><b>Panel interview</b><span>Updated ${escapeHtml(today)}</span></article><article><small>OWNER</small><b>${escapeHtml(terms.recruiters.replace(/s$/i,''))}</b><span>Talent team</span></article><article><small>CONSENT</small><b>Granted</b><span>Retention policy active</span></article></div><div class="mock-activity"><strong>Profile sections</strong>${Object.keys(config.customFields?.candidates || {}).length ? Object.keys(config.customFields.candidates).map(key => `<span>${escapeHtml(humanizePreview(key))}</span>`).join('') : '<span>Experience</span><span>Skills</span><span>Documents</span><span>Activity</span>'}</div></div>`
+  if (page === 'scorecards') {
+    const scorecard = variant || config.scorecards?.[0] || { name:'Interview scorecard', competencies:[] }
+    return `<div class="mock-scorecard"><div><strong>${escapeHtml(scorecard.name || 'Interview scorecard')}</strong><small>${scorecard.mandatoryFeedback ? 'Feedback required before completion' : 'Draft feedback may be saved'}</small></div>${(scorecard.competencies || []).map((item, index) => `<article><span><b>${escapeHtml(item.name || item.label || `Competency ${index + 1}`)}</b><small>Weight ${escapeHtml(item.weight ?? 1)}${item.required ? ' · Required' : ''}</small></span><i>${Array.from({length: Number(scorecard.ratingScale?.max || 5)}, (_, rating) => `<em>${rating + 1}</em>`).join('')}</i></article>`).join('') || '<div class="mock-empty">No competencies configured.</div>'}<footer><span>Recommendation</span><b>${escapeHtml((scorecard.recommendations || ['Yes']).map(humanizePreview).join(' · '))}</b></footer></div>`
+  }
+  if (page === 'requisitions') {
+    const workflow = variant || (config.approvalWorkflows || []).find(item => item.module === 'requisitions')
+    return `<div class="mock-stats"><article><small>OPEN REQUESTS</small><strong>6</strong><span>2 awaiting approval</span></article><article><small>PLANNED HEADCOUNT</small><strong>14</strong><span>Across 5 teams</span></article><article><small>APPROVAL SLA</small><strong>${escapeHtml(config.sla?.offerApprovalHours || 48)}h</strong><span>Configured response time</span></article></div>${workflowCard(workflow, 'Hiring request approval')}`
+  }
+  if (page === 'offers') {
+    const workflow = variant || (config.approvalWorkflows || []).find(item => item.module === 'offers')
+    return `<div class="mock-document"><div class="mock-document-head"><span><small>OFFER PREVIEW</small><strong>Senior Product Designer</strong></span><i>Draft</i></div><div class="mock-document-grid"><span><small>CANDIDATE</small><b>Maya Chen</b></span><span><small>COMPENSATION</small><b>${escapeHtml(money)}</b></span><span><small>EXPIRES</small><b>${escapeHtml(config.offers?.expiryDays || 7)} days after issue</b></span><span><small>CURRENCY</small><b>${escapeHtml(config.offers?.currency || data.currency)}</b></span></div><div class="mock-chip-list">${(config.offers?.compensationComponents || []).map(component => `<span>${escapeHtml(humanizePreview(component))}</span>`).join('')}</div></div>${workflowCard(workflow, 'Offer approval')}`
+  }
+  if (page === 'onboarding') {
+    const plan = variant || config.onboardingTemplates?.[0] || { name:'Onboarding plan', tasks:[] }
+    return `<div class="mock-checklist"><div><strong>${escapeHtml(plan.name || 'Onboarding plan')}</strong><small>${(plan.tasks || []).length} configured tasks</small></div>${(plan.tasks || []).map((task, index) => `<article><i>${index + 1}</i><span><b>${escapeHtml(task.title || task.name || 'Joining task')}</b><small>${escapeHtml(humanizePreview(task.ownerRoleId || 'HR'))} · ${Number(task.daysFromJoining || 0) < 0 ? `${Math.abs(Number(task.daysFromJoining))} days before joining` : `${Number(task.daysFromJoining || 0)} days after joining`}</small></span><em>${task.required === false ? 'Optional' : 'Required'}</em></article>`).join('') || '<div class="mock-empty">No onboarding tasks configured.</div>'}</div>`
+  }
+  if (page === 'communications') {
+    const template = variant || config.communicationTemplates?.[0] || {}
+    return `<div class="mock-message"><div><span><small>${escapeHtml(humanizePreview(template.channel || 'email'))}</small><b>${escapeHtml(template.event || 'Configured event')}</b></span><i>${template.approvalRequired ? 'Approval required' : 'Ready to send'}</i></div><label>Subject<strong>${escapeHtml(template.subject || 'Configured message subject')}</strong></label><section>${escapeHtml(template.body || 'Message content will appear here.')}</section><footer><span>Language ${escapeHtml((template.language || 'en').toUpperCase())}</span><b>Mock outbox · no live delivery</b></footer></div>`
+  }
+  if (page === 'automation') {
+    const rule = variant || config.automations?.[0]
+    return rule ? `<div class="mock-automation"><div><i>${rule.enabled === false ? 'Paused' : 'Active'}</i><span><strong>${escapeHtml(rule.name || 'Automation rule')}</strong><small>When ${escapeHtml(humanizePreview(rule.trigger?.event || rule.trigger || 'configured event'))}</small></span></div><em>→</em><section>${(rule.actions || []).map(action => `<span>${escapeHtml(humanizePreview(action.type || action.action || 'configured action'))}</span>`).join('') || '<span>No actions configured</span>'}</section></div>` : '<div class="mock-empty mock-empty-large"><strong>No automation rules configured</strong><span>Add a rule in Settings to preview its trigger and actions.</span></div>'
+  }
+  if (page === 'clients' || page === 'submissions' || page === 'placements' || page === 'invoices') return agencyPreview(page, { money, today, terms })
+  if (page === 'referrals') return `<div class="mock-stats"><article><small>ACTIVE REFERRALS</small><strong>18</strong><span>5 this month</span></article><article><small>HIRED</small><strong>4</strong><span>${escapeHtml((config.referrals?.milestones || []).map(humanizePreview).join(' → ') || 'Hired → Joined')}</span></article><article><small>REWARDS</small><strong>3</strong><span>${escapeHtml(humanizePreview(config.referrals?.payoutStatuses?.[0] || 'pending'))}</span></article></div><div class="mock-list"><strong>Recent referrals</strong><article><span><b>Sam Rivera</b><small>Referred by Jamie Lee</small></span><span>Interview</span><i class="mock-status">Active</i></article></div>`
+  if (page === 'talentCrm') return `<div class="mock-stats"><article><small>TALENT POOLS</small><strong>6</strong><span>Configured saved groups</span></article><article><small>CONSENTED TALENT</small><strong>284</strong><span>Eligible for follow-up</span></article><article><small>FOLLOW-UPS DUE</small><strong>12</strong><span>This week</span></article></div><div class="mock-list"><strong>Priority pools</strong><article><span><b>Product leadership</b><small>48 people · Shared</small></span><span>Updated ${escapeHtml(today)}</span></article><article><span><b>Engineering silver medalists</b><small>76 people · Private</small></span><span>8 follow-ups</span></article></div>`
+  if (page === 'workforcePlanning') return `<div class="mock-stats"><article><small>HIRING TARGET</small><strong>18</strong><span>Current quarter</span></article><article><small>HIRED</small><strong>12</strong><span>67% complete</span></article><article><small>OPEN GAP</small><strong>6</strong><span>Across 3 teams</span></article></div><div class="mock-progress-list"><article><span><b>Engineering</b><small>7 of 9</small></span><i><em style="width:78%"></em></i></article><article><span><b>Product</b><small>3 of 4</small></span><i><em style="width:75%"></em></i></article><article><span><b>Sales</b><small>2 of 5</small></span><i><em style="width:40%"></em></i></article></div>`
+  return `<div class="mock-stats"><article><small>OPEN ${escapeHtml(terms.jobs.toUpperCase())}</small><strong>12</strong><span>Across 4 departments</span></article><article><small>ACTIVE ${escapeHtml(terms.candidates.toUpperCase())}</small><strong>126</strong><span>+18 this month</span></article><article><small>AVERAGE TIME TO HIRE</small><strong>24 days</strong><span>↓ 3 days this quarter</span></article></div><div class="mock-chart"><div><strong>Hiring progress</strong><small>Current quarter</small></div><div class="chart-bars" role="img" aria-label="Sample hiring trend">${[40,62,48,76,58,88,67,100,77,92,72,83].map((height,index) => `<i style="height:${height}%;opacity:${.4+index*.05}"></i>`).join('')}</div><div class="chart-legend"><span>Target 18 hires</span><b>12 / 18</b></div></div><div class="mock-list"><div class="mock-list-heading"><strong>Upcoming interviews</strong><small>${escapeHtml(timeZone)} · ${escapeHtml(today)}</small></div><article><span><b>Maya Chen · Product Designer</b><small>Panel interview · Product team</small></span><span>${escapeHtml(today)} · ${escapeHtml(sampleTime)}</span><i class="mock-status">Confirmed</i></article><article><span><b>Arjun Mehta · Software Engineer</b><small>Technical round · Engineering</small></span><span>${escapeHtml(today)} · ${escapeHtml(sampleTime)}</span><i class="mock-status">Feedback due</i></article></div>`
 }
 
-$('#preview-page')?.addEventListener('change', event => { selectedPreviewPage = event.target.value; renderPreview() })
+function workflowCard(workflow, fallbackName) {
+  if (!workflow) return `<div class="mock-empty"><strong>${escapeHtml(fallbackName)}</strong><span>No approval workflow configured.</span></div>`
+  return `<div class="mock-workflow"><div><strong>${escapeHtml(workflow.name || fallbackName)}</strong><small>${workflow.sequential === false ? 'Parallel approval' : 'Sequential approval'}${workflow.threshold ? ` · Threshold ${escapeHtml(workflow.threshold)}` : ''}</small></div><section>${(workflow.steps || []).map((step, index) => `<span><i>${index + 1}</i><b>${escapeHtml(humanizePreview(step.roleId || step.userId || 'Approver'))}</b></span>`).join('<em>→</em>') || '<small>No approvers configured</small>'}</section></div>`
+}
+
+function agencyPreview(page, { money, today, terms }) {
+  const rows = {
+    clients: [['Northstar Analytics','Technology','Active'],['Summit Retail','Consumer','Active']],
+    submissions: [['Maya Chen','Senior Product Designer','Client review'],['Arjun Mehta','Platform Engineer','Interview']],
+    placements: [['Priya Shah','Summit Retail',today],['Alex Morgan','Northstar Analytics',today]],
+    invoices: [['INV-2026-014','Northstar Analytics',money],['INV-2026-013','Summit Retail','Paid']],
+  }[page] || []
+  const title = page === 'clients' ? terms.clients : humanizePreview(page)
+  return `<div class="mock-stats"><article><small>${escapeHtml(title.toUpperCase())}</small><strong>${page === 'invoices' ? '8' : '24'}</strong><span>Current active records</span></article><article><small>${page === 'placements' ? 'GUARANTEE ACTIVE' : 'DUE THIS WEEK'}</small><strong>${page === 'invoices' ? '3' : '6'}</strong><span>Needs attention</span></article><article><small>${page === 'invoices' ? 'OUTSTANDING' : 'CONVERSION'}</small><strong>${page === 'invoices' ? escapeHtml(money) : '32%'}</strong><span>Configured agency workflow</span></article></div><div class="mock-list"><div class="mock-list-heading"><strong>${escapeHtml(title)}</strong><small>Agency workspace</small></div>${rows.map(row => `<article><span><b>${escapeHtml(row[0])}</b><small>${escapeHtml(row[1])}</small></span><span>${escapeHtml(row[2])}</span><i class="mock-status">Tracked</i></article>`).join('')}</div>`
+}
+
+$('#preview-page')?.addEventListener('change', event => { selectedPreviewPage = event.target.value; selectedPreviewVariant = 'auto'; renderPreview() })
+$('#preview-variant')?.addEventListener('change', event => { selectedPreviewVariant = event.target.value; renderPreview() })
 $('#preview-frame')?.addEventListener('click', event => {
   const target = event.target.closest('[data-preview-page]')
   if (!target) return

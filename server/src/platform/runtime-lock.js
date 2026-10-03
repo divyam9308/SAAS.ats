@@ -18,12 +18,22 @@ function readLock(file) {
   } catch (error) { return error.code === 'ENOENT' ? null : { malformed: true }; }
 }
 function isStaleLocal(lock) { return !!lock && !lock.malformed && lock.host === os.hostname() && !processIsAlive(lock.pid); }
+function isTrustedSystemAlias(candidate, stats) {
+  if (process.platform !== 'darwin' || !stats.isSymbolicLink()) return false;
+  const expectedTarget = candidate === '/var' ? '/private/var' : candidate === '/tmp' ? '/private/tmp' : '';
+  if (!expectedTarget) return false;
+  try { return stats.uid === 0 && fs.realpathSync.native(candidate) === expectedTarget; }
+  catch { return false; }
+}
 function assertNoSymlinkAncestors(target) {
   const resolved = path.resolve(target);
   let current = path.parse(resolved).root;
   for (const part of resolved.slice(current.length).split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
-    try { if (fs.lstatSync(current).isSymbolicLink()) throw new RuntimeLockError(`Runtime lock path contains a symlink: ${current}`); }
+    try {
+      const stats = fs.lstatSync(current);
+      if (stats.isSymbolicLink() && !isTrustedSystemAlias(current, stats)) throw new RuntimeLockError(`Runtime lock path contains a symlink: ${current}`);
+    }
     catch (error) { if (error.code !== 'ENOENT') throw error; break; }
   }
 }
@@ -77,4 +87,4 @@ function acquirePlatformRuntimeLock(dbPath, { allowGenerationLock = false } = {}
       throw new RuntimeLockError(`Another local ATS runtime owns this database (PID ${current.pid})`);
     }
 }
-module.exports = { RuntimeLockError, lockPathFor, generationLockPathFor, acquirePlatformRuntimeLock, assertPlatformRuntimeStopped };
+module.exports = { RuntimeLockError, lockPathFor, generationLockPathFor, acquirePlatformRuntimeLock, assertPlatformRuntimeStopped, isTrustedSystemAlias };
