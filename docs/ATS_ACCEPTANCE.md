@@ -4,11 +4,38 @@ This ledger tracks the requested local SaaS platform expansion. A configuration 
 
 ## Scope and safety
 
-- Current work directory: `/workspace/SAAS.ats`, Git `main`, base `c65d2c8`. The original extracted directories described below are historical.
-- The user authorized committing and pushing the verified readiness changes on 2026-10-02. No original Fyndbridge repository was accessed or modified.
+- Current work directory: `/Users/divyamaggarwal/Desktop/files/ATS PUBLIC VERSION/SAAS.ats`, repository `divyam9308/SAAS.ats`, branch `main`; audit start base `38722ee`. Inspect live Git for delivery commits. Earlier cloud/extracted directories are historical.
+- The user explicitly authorized logical commits and a push for the current product audit (begun 2026-10-04, finalized 2026-10-05 IST), in addition to the historical 2026-10-02 publication. The original Fyndbridge repository was not modified.
 - Runtime: localhost, SQLite, local files, explicitly labelled mock user switching.
 - External email, calendars, payments and identity providers must remain mock adapters.
 - Platform capabilities, company configuration and operational records must remain separate.
+
+## Integrated product audit — begun 2026-10-04, finalized 2026-10-05 IST
+
+[PRODUCT_AUDIT_2026-10-04.md](PRODUCT_AUDIT_2026-10-04.md) is the current evidence/report; [CONFIGURATION_TRACEABILITY_2026-10-04.md](CONFIGURATION_TRACEABILITY_2026-10-04.md) inventories all 50 buyer areas and separates actual consumers from stored settings. Older dated results below are historical, including prior readiness estimates.
+
+The implemented pass fixes stable workflow editing, explicit no-approval and closed-stage policies, nested Settings edits, shared form conditions, configured scorecards and decision reasons, document access, permission-aware runtime choices/counts, and responsive/focus/work-queue behavior. API assertions and real corporate/agency browser journeys verify persistence and negative authorization. No hosted services or production identity were added.
+
+| Exact command | Final result |
+| --- | --- |
+| `npm test` | 50 passed, 0 failed/skipped |
+| `npm run test:platform` | 309 passed, 0 failed/skipped |
+| `npm --prefix server test` | 928 passed, 0 failed/skipped |
+| `npm run lint` | Passed |
+| `npm run build` | Passed without emitted warnings |
+| `npm run config:validate` | Corporate default schemaV2 valid |
+| `npm audit --json` and `npm --prefix server audit --json` | Both 0 vulnerabilities, including development dependencies |
+| `npm run test:generated` | Five presets × 326 tests; 10 clean installs, 5 builds, 11 API starts, 181 runtime/backup assertions, 15 backup CLI commands |
+| `npm run test:quality` | Passed platform/performance plus Chromium, Firefox and WebKit: 28 browser checks each |
+| `git diff --check` | Passed |
+
+Browser versions: chromium 153.0.8010.12, firefox 155.0, webkit 26.6. Layouts: 1440×960, 1280×900, 768×1024 and 390×844. Representative WCAG 2/2.1 A/AA axe scans have no critical/serious blockers on the scanned states. Keyboard reachability, dialog containment/Escape/restoration and current-page menu close are exercised; macOS WebKit uses native Option+Tab to traverse all controls. Captured page/console errors are empty; navigation-aborted requests are logged separately. This does not certify native Safari/device behavior or exhaustive accessibility.
+
+Performance: 20,000 candidates; list 148.1 ms; 60 concurrent reads p95 47.5 ms; 60 concurrent writes p95 33.9 ms; 30-second soak with 26,360 requests, p99 15.4 ms and memory growth 144.7 MB. This bounded local/admin synthetic workload is separate from production capacity or long endurance claims. Frontend/platform/server/generated test counts overlap.
+
+All five presets retain their actual mode, terminology, modules, roles, forms and stage graph. Each starts empty, persists one unique candidate, contains no other workspace's marker after restart, and preserves it in an independently restored backup. Full browser journeys run for corporate and agency; generated packages receive independent install/build/API/isolation/backup verification.
+
+Local pilot scope and remaining gaps are explicit in the report: general editors in some advanced areas, representative preview screens, unconsumed taxonomy catalogs/job-template reuse, one public upload, incomplete full translation/collaboration/report design, bounded load coverage and intentionally absent hosted/live providers. No percentage or complete-commercial-readiness claim is made.
 
 ## macOS portability and first-run browser hardening — 2026-10-04
 

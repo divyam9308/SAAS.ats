@@ -169,7 +169,9 @@ export async function verifyCorporateWorkflow({ page, api, check }) {
     const interviewRow = page.locator('.platform-table tbody tr').filter({ hasText: applicantLabel }).first()
     await interviewRow.getByRole('button', { name: 'Submit feedback', exact: true }).click()
     const action = modal()
-    for (const input of await action.locator('input[name^="rating_"]').all()) await input.fill('4')
+    const ratings = await action.locator('select[name^="rating_"]').all()
+    assert.ok(ratings.length > 0, 'Configured scorecard competencies should be presented')
+    for (const rating of ratings) await rating.selectOption('4')
     const recommendation = namedControl(action, 'recommendation')
     const recommendationValue = await recommendation.locator('option').nth(1).getAttribute('value')
     await recommendation.selectOption(recommendationValue)
@@ -177,7 +179,9 @@ export async function verifyCorporateWorkflow({ page, api, check }) {
     await action.getByRole('button', { name: 'Save', exact: true }).click()
     await waitDialogClosed()
     interview = (await api('/records/interviews')).find(item => item.id === interview.id)
-    assert.ok((await api('/records/feedback')).some(item => item.interviewId === interview.id && item.status === 'submitted'))
+    const feedback = (await api('/records/feedback')).find(item => item.interviewId === interview.id && item.status === 'submitted')
+    assert.ok(feedback, 'Submitted scorecard feedback should persist')
+    assert.ok(Object.values(feedback.answers).every(value => value === 4), 'Configured ratings should persist as numbers')
     assert.equal(interview.status, 'completed')
   })
 
@@ -238,5 +242,49 @@ export async function verifyCorporateWorkflow({ page, api, check }) {
     await clickNav('Notifications')
     await page.locator('.platform-breadcrumb strong').getByText('Notifications', { exact: true }).waitFor()
     await page.getByText('New application received', { exact: true }).waitFor()
+  })
+
+  await check('Application rejection and withdrawal persist configured and optional reason categories', async () => {
+    const jobId = (await api('/records/applications')).find(item => item.candidateId === applicant.id)?.jobId
+    assert.ok(jobId, 'An existing configured job should be available')
+    for (const actionName of ['reject', 'withdraw']) {
+      const firstName = `Decision ${actionName}`
+      const lastName = String(Date.now())
+      const email = `${actionName}-${lastName}@example.test`
+      await clickNav('Candidates')
+      await page.getByRole('button', { name: 'Add candidate', exact: true }).click()
+      await namedControl(modal(), 'firstName').fill(firstName)
+      await namedControl(modal(), 'lastName').fill(lastName)
+      await namedControl(modal(), 'email').fill(email)
+      await modal().getByRole('button', { name: 'Create candidate', exact: true }).click()
+      await waitDialogClosed()
+      const candidate = (await api('/records/candidates')).find(item => item.email === email)
+      assert.ok(candidate, 'Decision journey candidate should persist')
+      await clickNav('Applications')
+      await page.getByRole('button', { name: 'Add application', exact: true }).click()
+      await namedControl(modal(), 'candidateId').selectOption(candidate.id)
+      await namedControl(modal(), 'jobId').selectOption(jobId)
+      await modal().getByRole('button', { name: 'Create application', exact: true }).click()
+      await waitDialogClosed()
+      const application = (await api('/records/applications')).find(item => item.candidateId === candidate.id)
+      assert.ok(application, 'Decision journey application should persist')
+      await rowFor(firstName).getByRole('button', { name: actionName === 'reject' ? 'Reject' : 'Withdraw', exact: true }).click()
+      const category = namedControl(modal(), 'reasonCategory')
+      const categories = bootstrap.config.taxonomies[actionName === 'reject' ? 'rejectionReasons' : 'withdrawalReasons']
+      assert.ok(categories.length, 'Decision categories should come from configuration')
+      await category.selectOption(categories[0])
+      if (actionName === 'withdraw') await category.selectOption('')
+      const reason = 'Synthetic decision recorded through the visible application form.'
+      await namedControl(modal(), 'reason').fill(reason)
+      await modal().getByRole('button', { name: actionName === 'reject' ? 'Reject request' : 'Withdraw', exact: true }).click()
+      await waitDialogClosed()
+      const saved = (await api('/records/applications')).find(item => item.id === application.id)
+      const status = actionName === 'reject' ? 'rejected' : 'withdrawn'
+      const reasonCategory = actionName === 'reject' ? categories[0] : null
+      assert.equal(saved.status, status)
+      assert.equal(saved.endReason, reason)
+      assert.equal(saved.endReasonCategory, reasonCategory)
+      assert.ok((await api('/records/audit')).some(event => event.action === `application.${status}` && event.recordId === saved.id && event.details?.reasonCategory === reasonCategory), 'Decision category should be audited')
+    }
   })
 }

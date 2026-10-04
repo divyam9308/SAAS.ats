@@ -39,15 +39,19 @@ npm run build
 npm run config:validate
 ```
 
-The 2026-10-02 local readiness pass completed with 271 platform tests, 912 server tests, 30 frontend tests, and 21 actual Chromium browser checks passing. Corporate, agency and startup generated workspaces each passed 259 tests, installation, build and runtime checks. Lint, production build and dependency audits passed. See [docs/READINESS_2026-10-02.md](docs/READINESS_2026-10-02.md) for exact evidence, changed files and limitations; [docs/ATS_ACCEPTANCE.md](docs/ATS_ACCEPTANCE.md) retains the historical ledger. This verifies the local product phase, not a hosted production SaaS deployment.
+The [2026-10-04 product audit](docs/PRODUCT_AUDIT_2026-10-04.md) records the final results, implemented fixes, actual browser workflows, models and remaining limits. The [50-area configuration trace](docs/CONFIGURATION_TRACEABILITY_2026-10-04.md) distinguishes working consumers from stored settings. Historical runs remain in [the acceptance ledger](docs/ATS_ACCEPTANCE.md).
 
-For reproducible browser acceptance, install Chromium once and run the harness:
+The Builder preserves pipeline/stage identities and supports explicit stage moves and approval modes. Settings has dedicated pipeline, approval, application-form and scorecard editors. Public application visibility uses the same evaluator in the browser and API; invalid identity/consent/upload definitions are rejected before activation. The runtime groups required/additional form fields and record details and includes a scoped operational work queue.
+
+Install browser engines once, then run the integrated platform, performance and browser gate:
 
 ```bash
-npx playwright install chromium
-npm run test:browser
+npx playwright install chromium firefox webkit
+npm run test:quality
+npm test
+npm run test:generated
 ```
 
-Run `npm run test:generated` for the generated corporate/agency/startup workspace matrix. Use the latest run when reporting status.
+`npm run test:browser` runs Chromium; `npm run test:browser:all` runs Chromium, Firefox and WebKit. Browser acceptance includes 1440, 1280, 768 and 390 pixel widths. `npm run test:generated` installs, builds and tests corporate, agency, startup, campus and basic workspaces, then checks restart isolation and offline backup/restore. `npm run test:soak` runs the separate five-minute local performance soak. Use the latest report when citing measured results.
 
 External email, calendar, payment, and identity providers are mock/local interfaces in this development phase. This checkout is a local testing platform and must not be represented as a deployed production service.

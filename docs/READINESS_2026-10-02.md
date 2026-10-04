@@ -1,5 +1,7 @@
 # Local ATS readiness report — 2026-10-02
 
+> Historical report. The integrated [2026-10-04 product audit](PRODUCT_AUDIT_2026-10-04.md) and [50-area configuration trace](CONFIGURATION_TRACEABILITY_2026-10-04.md) supersede the readiness/test/model statements below for the current source. The dated evidence below remains unchanged as a historical record.
+
 The requested local readiness pass is complete. This report supersedes the paused `CHECKPOINT_2026-10-02.md`. Source: `/workspace/SAAS.ats`, branch `main`, base `c65d2c899d9684175225bfe07c0972338fd2d753`. Verification completed before publication; the user explicitly authorized committing and pushing this pass on 2026-10-02. The user's Mac checkout was not accessed, and the original Fyndbridge repository was not modified.
 
 ## macOS follow-up — 2026-10-04

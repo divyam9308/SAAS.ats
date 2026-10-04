@@ -18,6 +18,17 @@ const runId = randomUUID().slice(0, 8)
 const generated = []
 const childProcesses = new Set()
 const counts = { generatedCi: 0, builds: 0, workspaceTests: 0, runtimeStarts: 0, runtimeAssertions: 0, backupCommands: 0 }
+const PRESETS = ['corporate', 'agency', 'startup', 'campus', 'basic']
+const RUNTIME_MODES = { corporate: 'corporate', agency: 'agency', startup: 'startup', campus: 'corporate', basic: 'startup' }
+const MODULE_ROUTES = [
+  ['agency', 'clients', config => config.modules.agency],
+  ['invoices', 'invoices', config => config.modules.agency && config.modules.invoices],
+  ['referrals', 'referrals', config => config.modules.referrals],
+  ['talentCrm', 'talentPools', config => config.modules.talentCrm],
+  ['requisitions', 'requisitions', config => config.modules.requisitions],
+  ['offers', 'offers', config => config.modules.offers],
+  ['onboarding', 'onboarding', config => config.modules.onboarding]
+]
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -68,6 +79,17 @@ async function getJson(url, headers = {}) {
   return { response, body: await response.json().catch(() => ({})) }
 }
 
+function runtimeEnv(entry, port) {
+  return {
+    ...process.env,
+    NODE_ENV: 'development', PLATFORM_MODE: 'true', LOCAL_DEMO_MODE: 'true', PORT: String(port),
+    ATS_PLATFORM_CONFIG: path.join(entry.workspaceDirectory, 'config', 'platform.config.json'),
+    ATS_PLATFORM_DB: entry.dbPath,
+    ATS_PLATFORM_DATA_DIR: entry.docsPath,
+    ATS_PLATFORM_SEED_DEMO: 'false', PLATFORM_REMINDERS: 'false'
+  }
+}
+
 async function waitForBootstrap(url, headers, processInfo) {
   let lastError
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -88,8 +110,8 @@ function makeConfig(preset, label) {
   config.company.slug = `matrix-${label}-${runId}`
   config.company.legalName = `${config.company.name} LLC`
   config.branding.productName = `${config.company.name} ATS`
-  config.terminology.jobs = `${label[0].toUpperCase()}${label.slice(1)} Roles`
-  config.terminology.candidates = `${label[0].toUpperCase()}${label.slice(1)} People`
+  // Keep each preset's intentionally distinct terminology (notably agency mandates
+  // and campus students) while giving every generated company a unique identity.
   const pipeline = config.pipelines.find(item => item.default) || config.pipelines[0]
   pipeline.name = `${label[0].toUpperCase()}${label.slice(1)} Flow ${runId}`
   return config
@@ -97,6 +119,7 @@ function makeConfig(preset, label) {
 
 async function verifyWorkspace(entry) {
   const { workspaceDirectory: cwd, slug, preset, config } = entry
+  let operationalRecordCount = 0
   await run(npm, ['ci'], { cwd }); counts.generatedCi++
   await run(npm, ['--prefix', 'server', 'ci'], { cwd }); counts.generatedCi++
   await run(npm, ['run', 'build'], { cwd }); counts.builds++
@@ -120,25 +143,85 @@ async function verifyWorkspace(entry) {
     const { body } = await waitForBootstrap(`${base}/bootstrap`, auth, api)
     const bootstrap = body.data
     assert.equal(bootstrap.config.company.slug, slug, `${slug}: expected generated config at bootstrap`)
-    assert.equal(bootstrap.config.mode, preset, `${slug}: expected preset mode at bootstrap`)
+    assert.equal(bootstrap.config.mode, RUNTIME_MODES[preset], `${slug}: preset should retain its documented runtime mode`)
+    assert.deepEqual(bootstrap.config.modules, config.modules, `${slug}: configured module gates should survive runtime`)
     assert.equal(bootstrap.config.terminology.jobs, config.terminology.jobs, `${slug}: custom terminology should survive runtime`)
     assert.equal(bootstrap.config.terminology.candidates, config.terminology.candidates, `${slug}: candidate terminology should survive runtime`)
     const pipeline = bootstrap.config.pipelines.find(item => item.default) || bootstrap.config.pipelines[0]
-    assert.equal(pipeline.name, config.pipelines.find(item => item.default)?.name || config.pipelines[0].name, `${slug}: pipeline should reflect generated preset`)
-    assert.ok(bootstrap.config.roles.some(role => role.id === 'admin'), `${slug}: configured roles should be present`)
+    assert.deepEqual(pipeline, config.pipelines.find(item => item.default) || config.pipelines[0], `${slug}: configured stage graph should survive runtime`)
+    assert.deepEqual(bootstrap.config.roles.map(role => role.id).sort(), config.roles.map(role => role.id).sort(), `${slug}: configured roles should survive runtime`)
+    assert.deepEqual(bootstrap.config.users.map(user => user.id).sort(), config.users.map(user => user.id).sort(), `${slug}: configured demo personas should survive runtime`)
+    assert.deepEqual(bootstrap.config.applicationForms, config.applicationForms, `${slug}: configured application forms should survive runtime`)
     const candidates = await getJson(`${base}/records/candidates`, auth)
     assert.equal(candidates.response.status, 200, `${slug}: candidate listing should be authorized`)
     assert.equal(candidates.body.data.length, 0, `${slug}: demo seeding must remain disabled`)
     const clients = await getJson(`${base}/records/clients`, auth)
     assert.equal(clients.response.status, preset === 'agency' ? 200 : 403, `${slug}: client route must follow agency capability`)
-    counts.runtimeAssertions += 6
+    for (const [module, kind, enabled] of MODULE_ROUTES) {
+      const result = await getJson(`${base}/records/${kind}`, auth)
+      assert.equal(result.response.status, enabled(config) ? 200 : 403, `${slug}: ${module} route must follow its configured module gate`)
+      counts.runtimeAssertions++
+    }
+    const interviewer = config.users.find(user => user.roleId === 'interviewer')
+    assert.ok(interviewer, `${slug}: expected a configured interviewer persona`)
+    const deniedCreate = await fetch(`${base}/records/candidates`, {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json', 'x-demo-user': interviewer.id },
+      body: JSON.stringify({ data: { name: `Denied ${slug}`, email: `denied-${slug}@example.test` } }), signal: AbortSignal.timeout(1800)
+    })
+    assert.equal(deniedCreate.status, 403, `${slug}: interviewer must be denied candidate creation`)
+    counts.runtimeAssertions += 13
+    const marker = `matrix-${slug}@example.test`
+    const created = await fetch(`${base}/records/candidates`, {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ data: { name: `Matrix ${slug} Persistence`, email: marker } }), signal: AbortSignal.timeout(1800)
+    })
+    const createdBody = await created.json().catch(() => ({}))
+    assert.equal(created.status, 201, `${slug}: synthetic persistence record should be created: ${JSON.stringify(createdBody)}`)
+    assert.equal(createdBody.data.email, marker, `${slug}: synthetic persistence record should retain its unique marker`)
+    counts.runtimeAssertions += 2
+    const afterCreate = await getJson(`${base}/bootstrap`, auth)
+    assert.equal(afterCreate.body.data.counts.candidates, 1, `${slug}: exactly one synthetic candidate should be persisted`)
+    counts.runtimeAssertions++
   } finally {
     await stop(api)
   }
 
   assert.ok((await stat(dbPath)).isFile(), `${slug}: runtime should create isolated SQLite file`)
+  // Bootstrap counts intentionally omit disabled or unreadable modules. The
+  // offline backup includes all stored records, including audit/automation data.
+  const snapshot = new (require('node:sqlite').DatabaseSync)(dbPath, { readOnly: true })
+  try {
+    operationalRecordCount = snapshot.prepare('SELECT COUNT(*) AS count FROM platform_records').get().count
+    const candidates = snapshot.prepare("SELECT data FROM platform_records WHERE kind='candidates'").all().map(row => JSON.parse(row.data))
+    assert.deepEqual(candidates.map(candidate => candidate.email), [markerFor(slug)], `${slug}: offline snapshot should contain only its own synthetic candidate`)
+    counts.runtimeAssertions++
+  } finally { snapshot.close() }
   await mkdir(docsPath, { recursive: true })
-  return { ...entry, dbPath, docsPath }
+  return { ...entry, dbPath, docsPath, marker: `matrix-${slug}@example.test`, operationalRecordCount }
+}
+
+function markerFor(slug) { return `matrix-${slug}@example.test` }
+
+async function verifyPersistenceIsolation(entries) {
+  for (const entry of entries) {
+    const port = await freePort()
+    const api = start(process.execPath, [path.join(entry.workspaceDirectory, 'server', 'server.js')], entry.workspaceDirectory, runtimeEnv(entry, port))
+    counts.runtimeStarts++
+    try {
+      const base = `http://127.0.0.1:${port}/api/platform`
+      const { body } = await waitForBootstrap(`${base}/bootstrap`, { 'x-demo-user': 'demo-admin' }, api)
+      assert.equal(body.data.config.company.slug, entry.slug, `${entry.slug}: restarted workspace should load its own persisted config`)
+      const candidates = await getJson(`${base}/records/candidates`, { 'x-demo-user': 'demo-admin' })
+      assert.equal(candidates.response.status, 200, `${entry.slug}: restarted candidate API should remain available`)
+      assert.ok(candidates.body.data.some(candidate => candidate.email === entry.marker), `${entry.slug}: synthetic candidate should survive restart`)
+      counts.runtimeAssertions += 3
+      for (const other of entries) {
+        if (other === entry) continue
+        assert.equal(candidates.body.data.some(candidate => candidate.email === other.marker), false, `${entry.slug}: must not contain ${other.preset}'s candidate`)
+        counts.runtimeAssertions++
+      }
+    } finally { await stop(api) }
+  }
 }
 
 async function verifyBackup(entry) {
@@ -152,7 +235,7 @@ async function verifyBackup(entry) {
   const preview = await run(process.execPath, ['scripts/deployment-backup.mjs', 'preview', '--bundle', backupPath], { cwd: root, env }); counts.backupCommands++
   const details = JSON.parse(preview.stdout)
   assert.equal(details.companyCount, 1, `${entry.slug}: backup preview should contain its configured company`)
-  assert.equal(details.recordCount, 0, `${entry.slug}: empty operational database should remain empty in backup`)
+  assert.equal(details.recordCount, entry.operationalRecordCount, `${entry.slug}: backup should contain its expected synthetic operational record count`)
   await run(process.execPath, ['scripts/deployment-backup.mjs', 'restore', '--bundle', backupPath, '--db', restoreDb, '--documents', restoreDocs, '--replace', '--confirm'], { cwd: root, env }); counts.backupCommands++
   assert.ok((await stat(restoreDb)).isFile(), `${entry.slug}: restore should create database at separate target`)
   assert.ok((await stat(restoreDocs)).isDirectory(), `${entry.slug}: restore should create document directory at separate target`)
@@ -162,8 +245,10 @@ async function verifyBackup(entry) {
     const configRow = db.prepare('SELECT active FROM platform_config').get()
     assert.ok(configRow, `${entry.slug}: restored database should contain the initialized configuration`)
     assert.equal(JSON.parse(configRow.active).company.slug, entry.slug)
+    const candidates = db.prepare("SELECT data FROM platform_records WHERE kind='candidates'").all().map(row => JSON.parse(row.data))
+    assert.deepEqual(candidates.map(candidate => candidate.email), [entry.marker], `${entry.slug}: restored backup should preserve the unique candidate`)
   } finally { db.close() }
-  counts.runtimeAssertions += 4
+  counts.runtimeAssertions += 5
   return { backupPath, restoreRoot }
 }
 
@@ -210,7 +295,7 @@ async function cleanup() {
 try {
   // The source dependency trees are already installed and are shared with concurrent browser verification.
   // Verify the generated root and server lockfiles through clean installs instead.
-  for (const preset of ['corporate', 'agency', 'startup']) {
+  for (const preset of PRESETS) {
     const config = makeConfig(preset, preset)
     const result = await generateCompanyPackage(config)
     generated.push({ ...result, preset, config })
@@ -219,8 +304,9 @@ try {
   for (const entry of generated) verified.push(await verifyWorkspace(entry))
   await verifyProductionAuth(verified[0])
   const backupResults = []
+  await verifyPersistenceIsolation(verified)
   for (const entry of verified) backupResults.push(await verifyBackup(entry))
-  console.log(`Generated matrix passed: 3 distinct packages; generated root/server npm ci ${counts.generatedCi}/6; production builds ${counts.builds}/3; workspace npm test ${counts.workspaceTests}/3; API starts ${counts.runtimeStarts}; runtime/backup assertions ${counts.runtimeAssertions}; backup CLI commands ${counts.backupCommands}.`)
+  console.log(`Generated matrix passed: ${verified.length} distinct packages (${PRESETS.join(', ')}); generated root/server npm ci ${counts.generatedCi}/${verified.length * 2}; production builds ${counts.builds}/${verified.length}; workspace npm test ${counts.workspaceTests}/${verified.length}; API starts ${counts.runtimeStarts}; runtime/backup assertions ${counts.runtimeAssertions}; backup CLI commands ${counts.backupCommands}.`)
 } catch (error) {
   console.error(`Generated matrix failed: ${error.stack || error.message}`)
   process.exitCode = 1

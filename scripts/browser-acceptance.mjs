@@ -22,11 +22,17 @@ process.env.TMPDIR = realpathSync(tmpdir())
 // namespaces can run the same real UI checks as a developer's workstation.
 const playwright = await import(process.env.ATS_PLAYWRIGHT_MODULE ? pathToFileURL(resolve(process.env.ATS_PLAYWRIGHT_MODULE, 'index.mjs')).href : 'playwright')
 const browserName = String(process.env.ATS_BROWSER || 'chromium').toLowerCase()
+// macOS WebKit's default Tab traversal includes text controls; Option+Tab
+// traverses all native interactive controls without changing system preferences.
+const forwardTab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab'
+const backwardTab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Shift+Tab' : 'Shift+Tab'
 const browserType = playwright[browserName]
 if (!browserType || !['chromium', 'firefox', 'webkit'].includes(browserName)) throw new Error(`Unsupported ATS_BROWSER "${browserName}".`)
 const root = process.cwd()
 await mkdir(join(root, 'generated'), { recursive: true })
 const directory = await mkdtemp(join(root, 'generated', '.browser-acceptance-'))
+const artifactDirectory = join(root, '.browser', 'product-audit-20261004', browserName)
+await mkdir(artifactDirectory, { recursive: true })
 const children = []
 const errors = []
 const checks = []
@@ -72,6 +78,15 @@ async function checkAccessibility(page, label) {
   assert.deepEqual(blockers.map(violation => ({ id: violation.id, impact: violation.impact, nodes: violation.nodes.length, targets: violation.nodes.slice(0, 30).map(node => node.target.join(' ')) })), [], `${label} accessibility blockers`)
   assert.equal(Boolean(await page.locator('html').getAttribute('lang')), true, `${label} declares a document language`)
 }
+async function assertNoHorizontalOverflow(page, label) {
+  const dimensions = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, innerWidth }))
+  assert.ok(dimensions.scrollWidth <= dimensions.innerWidth + 1, `${label} horizontal overflow: ${dimensions.scrollWidth}px > ${dimensions.innerWidth}px`)
+}
+async function captureViewport(page, label) {
+  const file = join(artifactDirectory, `${label}.png`)
+  await page.screenshot({ path: file, fullPage: true })
+  console.log(`ARTIFACT ${file}`)
+}
 async function api(route, data, method = 'GET', user = 'demo-admin') {
   const response = await fetch(`http://127.0.0.1:4000/api/platform${route}`, { method, headers: { 'Content-Type': 'application/json', 'X-Demo-User': user }, ...(data === undefined ? {} : { body: JSON.stringify({ data }) }) })
   const payload = await response.json()
@@ -89,7 +104,7 @@ try {
   const launchOptions = { executablePath, ...(browserName === 'chromium' ? { args: ['--no-sandbox', '--disable-dev-shm-usage'] } : {}), headless: true }
   browser = await browserType.launch(launchOptions)
   context = await browser.newContext({ viewport: { width: 1440, height: 960 } })
-  console.log(`Browser engine: ${browserName} ${browser.version()}; desktop 1440x960; mobile 390x844`)
+  console.log(`Browser engine: ${browserName} ${browser.version()}; viewports 1440x960, 1280x900, 768x1024, 390x844`)
   const page = await context.newPage()
   currentPage = page
   page.on('pageerror', error => errors.push(error.message))
@@ -100,8 +115,8 @@ try {
   await check('Builder live preview, generation and Apply', async () => {
     await page.goto('http://127.0.0.1:4177')
     await checkAccessibility(page, 'Builder')
-    await page.locator('body').press('Tab')
-    for (let index = 0; index < 40 && !(await page.locator('#next').evaluate(element => element === document.activeElement)); index += 1) await page.keyboard.press('Tab')
+    await page.locator('body').press(forwardTab)
+    for (let index = 0; index < 40 && !(await page.locator('#next').evaluate(element => element === document.activeElement)); index += 1) await page.keyboard.press(forwardTab)
     assert.equal(await page.locator('#next').evaluate(element => element === document.activeElement), true, 'Builder primary action must be keyboard reachable')
     const previewPages = await page.locator('#preview-page option').evaluateAll(options => options.map(option => option.value).filter(value => value !== 'auto'))
     for (const previewPage of previewPages) {
@@ -158,6 +173,42 @@ try {
     await page.reload()
     await page.locator('.ats-settings-nav-item').filter({ hasText: /^Branding$/ }).click()
     assert.equal(await page.getByLabel('ATS display name', { exact: false }).inputValue(), 'Reviewed ATS')
+  })
+  await check('Settings pipeline stage rename saves through buyer controls and preserves stage graph', async () => {
+    const before = await api('/config/draft')
+    const pipelineBefore = before.pipelines.find(item => item.default) || before.pipelines[0]
+    const stageBefore = pipelineBefore.stages[0]
+    const renamed = `${stageBefore.name} Reviewed`
+    await page.locator('.ats-settings-nav-item').filter({ hasText: /^Pipelines$/ }).click()
+    await checkAccessibility(page, 'Settings pipeline editor')
+    await page.getByLabel('Stage name', { exact: true }).first().fill(renamed)
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+    await page.getByText('Draft saved', { exact: false }).waitFor()
+    await page.reload()
+    await page.locator('.ats-settings-nav-item').filter({ hasText: /^Pipelines$/ }).click()
+    assert.equal(await page.getByLabel('Stage name', { exact: true }).first().inputValue(), renamed)
+    const after = await api('/config/draft')
+    const pipelineAfter = after.pipelines.find(item => item.id === pipelineBefore.id)
+    assert.ok(pipelineAfter)
+    assert.equal(pipelineAfter.stages[0].name, renamed)
+    assert.deepEqual(pipelineAfter.stages.map(stage => stage.id), pipelineBefore.stages.map(stage => stage.id))
+    assert.deepEqual(pipelineAfter.transitions, pipelineBefore.transitions)
+    await page.getByLabel('Stage name', { exact: true }).first().fill(stageBefore.name)
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+    await page.getByText('Draft saved', { exact: false }).waitFor()
+    await page.reload()
+    const restored = await api('/config/draft')
+    const pipelineRestored = restored.pipelines.find(item => item.id === pipelineBefore.id)
+    assert.equal(pipelineRestored.stages[0].name, stageBefore.name)
+    assert.deepEqual(pipelineRestored.stages.map(stage => stage.id), pipelineBefore.stages.map(stage => stage.id))
+    assert.deepEqual(pipelineRestored.transitions, pipelineBefore.transitions)
+  })
+  await check('Buyer form, approval and scorecard editors have accessible controls', async () => {
+    for (const label of ['Application forms', 'Approvals', 'Scorecards & plans']) {
+      await page.locator('.ats-settings-nav-item').filter({ hasText: label }).click()
+      await page.locator('.ats-domain-editor').waitFor()
+      await checkAccessibility(page, `Settings ${label}`)
+    }
   })
   await check('Readable activation diff and confirmation', async () => {
     await page.getByRole('button', { name: 'Review & activate' }).click()
@@ -315,8 +366,82 @@ try {
       }
     }
   })
+  await check('Responsive Builder, ATS, dialog and Careers layouts at four viewports', async () => {
+    const viewports = [
+      { width: 1440, height: 960 },
+      { width: 1280, height: 900 },
+      { width: 768, height: 1024 },
+      { width: 390, height: 844 },
+    ]
+    const duplicates = await api('/records/candidates')
+    assert.ok(duplicates.length >= 1, 'Seeded candidate records are needed for responsive detail checks')
+    const duplicateSource = duplicates[0]
+    const createdDuplicate = await api('/records/candidates', { name: duplicateSource.name, email: duplicateSource.email }, 'POST')
+    assert.ok(createdDuplicate.id, 'Create a temporary duplicate to open the nested merge action dialog')
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      const label = `${viewport.width}x${viewport.height}`
+      await page.goto('http://127.0.0.1:4177')
+      await page.locator('#next').waitFor()
+      assert.equal(await page.locator('#next').isVisible(), true, `${label}: Builder primary action should be usable`)
+      await assertNoHorizontalOverflow(page, `${label} Builder`)
+      await captureViewport(page, `viewport-${label}-builder`)
+
+      await page.goto('http://127.0.0.1:5173/platform/candidates')
+      await page.locator('.platform-user-button').waitFor()
+      if (viewport.width <= 900) {
+        await page.getByRole('button', { name: 'Open menu', exact: true }).click()
+        await page.locator('.platform-sidebar.is-open').waitFor()
+        await page.locator('.platform-nav-link').filter({ hasText: /^Candidates$/ }).click()
+        await page.locator('.platform-sidebar:not(.is-open)').waitFor({ state: 'attached' })
+      } else {
+        await page.locator('.platform-nav-link').filter({ hasText: /^Candidates$/ }).click()
+      }
+      await page.locator('.platform-table-wrap').waitFor()
+      await assertNoHorizontalOverflow(page, `${label} ATS list`)
+      await captureViewport(page, `viewport-${label}-ats-list`)
+      const candidateButton = page.locator('.platform-primary-cell button').filter({ hasText: duplicateSource.name }).first()
+      await candidateButton.click()
+      const drawer = page.getByRole('dialog', { name: 'Candidate details' })
+      await drawer.waitFor()
+      await assertNoHorizontalOverflow(page, `${label} ATS details`)
+      await captureViewport(page, `viewport-${label}-ats-details`)
+      await drawer.getByRole('button', { name: 'Scan for duplicates', exact: true }).click()
+      const duplicateCard = drawer.locator('.platform-duplicate-card').filter({ hasText: createdDuplicate.email })
+      await duplicateCard.waitFor()
+      await duplicateCard.getByRole('button', { name: 'Keep this candidate as primary', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: /merge/i })
+      await dialog.waitFor()
+      await assertNoHorizontalOverflow(page, `${label} ATS modal`)
+      await captureViewport(page, `viewport-${label}-ats-modal`)
+      const focusable = dialog.locator('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      const focusCount = await focusable.count()
+      assert.ok(focusCount >= 3, `${label}: merge action dialog should have a useful keyboard loop`)
+      const first = focusable.first()
+      const last = focusable.last()
+      await first.focus()
+      await page.keyboard.press(backwardTab)
+      assert.equal(await last.evaluate(element => element === document.activeElement), true, `${label}: Shift+Tab should wrap within the topmost action dialog`)
+      await page.keyboard.press(forwardTab)
+      assert.equal(await first.evaluate(element => element === document.activeElement), true, `${label}: Tab should wrap within the topmost action dialog`)
+      await page.keyboard.press('Escape')
+      await dialog.waitFor({ state: 'detached' })
+      await drawer.waitFor()
+      assert.equal(await page.evaluate(() => Boolean(document.querySelector('.platform-record-drawer')?.contains(document.activeElement))), true, `${label}: closing the action dialog should restore focus to the record drawer`)
+      await page.keyboard.press('Escape')
+      await drawer.waitFor({ state: 'detached' })
+
+      await page.goto('http://127.0.0.1:5173/careers-platform')
+      await page.locator('.platform-career-job').first().waitFor()
+      await assertNoHorizontalOverflow(page, `${label} Careers`)
+      await captureViewport(page, `viewport-${label}-careers`)
+    }
+  })
   await check('Mobile workspace menu and careers layout', async () => {
     await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('http://127.0.0.1:5173/platform')
+    await page.locator('.platform-user-button').waitFor()
     await page.getByRole('button', { name: 'Open menu', exact: true }).click()
     await page.locator('.platform-sidebar.is-open').waitFor()
     await page.getByRole('button', { name: 'Close menu', exact: true }).click()

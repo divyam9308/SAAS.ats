@@ -1,7 +1,7 @@
 # SaaS ATS / ATS Generator — Complete Project Context and Handoff
 
-**Latest verified readiness pass:** 2026-10-04 — read the macOS follow-up in `docs/READINESS_2026-10-02.md` and the latest section of `docs/ATS_ACCEPTANCE.md` first. It supersedes the paused verification status in `docs/CHECKPOINT_2026-10-02.md` and older sections below. The 2026-10-02 readiness pass was committed as `9dbd063`; the 2026-10-04 macOS portability fixes are local until the user explicitly requests a commit/push.
-**Current working directory:** `/Users/divyamaggarwal/Desktop/files/ATS PUBLIC VERSION/SAAS.ats` (Git `main`, base `9dbd063` plus the uncommitted macOS follow-up).
+**Latest product audit:** begun 2026-10-04, finalized 2026-10-05 IST — read `docs/PRODUCT_AUDIT_2026-10-04.md`, `docs/CONFIGURATION_TRACEABILITY_2026-10-04.md` and the latest section of `docs/ATS_ACCEPTANCE.md`. They supersede earlier test/browser/readiness statements below. The original macOS follow-up was already committed before this pass began.
+**Current working directory:** `/Users/divyamaggarwal/Desktop/files/ATS PUBLIC VERSION/SAAS.ats`, repository `divyam9308/SAAS.ats`, branch `main`; audit start base `38722eec694453a7dd18fbd1e69b283e9dd663fb`. Inspect live Git HEAD for delivery commits. The user explicitly authorized logical commits and a push for the 2026-10-04 audit task.
 **Purpose of this file:** Give a new VS Code/Codex/AI session enough accurate context to continue this project without relying on the old chat history.
 
 ---
@@ -23,7 +23,7 @@ The current phase is deliberately local:
 - Do not require paid email, calendar, payments, job board, e-signature, or other integrations.
 - Keep clean interfaces around persistence, authentication, communications, calendars, storage, and integrations so hosted providers can replace local adapters later.
 
-This checkout contains a working isolated local platform, but it must **not** be described as a fully production-deployed SaaS. The macOS follow-up passed 272 platform tests, 913 server tests, 30 frontend tests, 21 actual Chromium browser checks, and the corporate/agency/startup generated matrix (260 tests each). Lint, build, config validation and root/server audits passed. Older checkpoints below are historical; the latest readiness report is authoritative. Browser coverage is representative, not exhaustive coverage of all 50 original buyer areas.
+This checkout contains an isolated local platform with reviewed corporate and agency journeys and five generated presets. Dedicated pipeline, approval, form and scorecard editors, shared public conditions, scoped counts/choices, document policy, an operational queue and responsive/focus fixes are implemented. The current audit is the authority for actual test/browser/performance evidence and limitations. Local/mock behavior must remain explicit. Representative acceptance does not prove every combination in the 50-area brief or a hosted SaaS launch.
 
 ---
 
@@ -32,8 +32,8 @@ This checkout contains a working isolated local platform, but it must **not** be
 1. **Never modify, commit to, push to, or otherwise alter the original Fyndbridge ATS repository** (`divyam9308/fyndbridge-ats`). It may only be used as a reference.
 2. All implementation belongs in the SaaS ATS/generator project (`divyam9308/SAAS.ats`) or this current extracted working directory.
 3. Before editing, run `pwd` and inspect for Git metadata so the active repository is unambiguous.
-4. The current Mac directory is a Git worktree cloned from `divyam9308/SAAS.ats`, branch `main`, base commit `9dbd063`. Always inspect the live Git state because the macOS follow-up may still be uncommitted.
-5. Do not push automatically. The user must explicitly request a push.
+4. The current Mac directory is a Git worktree cloned from `divyam9308/SAAS.ats`, branch `main`. The 2026-10-04 audit began at `38722ee`; always inspect live Git state and preserve unrelated user changes.
+5. A push requires an explicit user request. The 2026-10-04 audit request authorized logical commits and a push to `SAAS.ats/main`; this does not authorize writes to any other repository.
 6. Do not commit dependency caches, build output, local databases, uploaded test files, browser artifacts, secrets, or generated junk.
 7. Preserve unrelated user changes. Avoid destructive Git or filesystem operations.
 
@@ -369,67 +369,21 @@ This table is intentionally conservative. A configuration field alone is not pro
 
 ## 8. Current verified test state
 
-The following was rerun in this exact workspace on **2026-10-01**:
+The integrated 2026-10-04 audit records 50 frontend tests, 309 platform tests and 928 server tests, with zero failures/skips in the final reported runs. Counts overlap and must not be summed as unique tests. Lint, build, config validation, root/server dependency audits and whitespace checks are recorded in `docs/PRODUCT_AUDIT_2026-10-04.md`.
 
-```bash
-npm run test:platform
-```
+Five generated presets are verified independently: corporate, agency, startup, campus and basic. The matrix checks clean installs/builds/workspace tests, actual config/module differences, denied interviewer creation, empty initial data, a unique persisted candidate per workspace, restart isolation and independent offline backup/restore. Refer to the report for final counters and the exact command ledger.
 
-Result:
-
-```text
-233 passed
-0 failed
-0 skipped
-```
-
-```bash
-npm --prefix server test
-```
-
-Result:
-
-```text
-884 passed
-0 failed
-1 intentional existing skip
-```
-
-```bash
-npm run lint
-```
-
-Result: passed with exit code 0.
-
-```bash
-npm run build
-```
-
-Result: passed. The 2026-10-04 follow-up removed the former mixed static/dynamic import warning while preserving lazy public-route boot.
-
-```bash
-npm run config:validate
-```
-
-Result: passed; the default corporate schemaV2 configuration is valid.
-
-The last complete generated-workspace matrix, before the later live-preview/macOS proxy-only changes, verified corporate, agency, and startup workspaces independently. Each passed its copied platform suite and Vite build. Runtime client access differed as expected:
-
-```text
-corporate: 403
-agency:    200
-startup:   403
-```
-
-Do not silently treat that older matrix as a newly rerun result. Rerun the generated matrix when modifying generator, config-copy, startup, or platform runtime behavior.
+`npm run test:quality` combines the platform suite, a bounded 20,000-candidate local performance/30-second soak test, and the Chromium/Firefox/WebKit acceptance matrix. `npm run test:soak` is a separate five-minute option. Test evidence is specific to this local environment and workload.
 
 ---
 
 ## 9. Browser acceptance status
 
-**Representative local Chromium acceptance passed again on the user's Mac on 2026-10-04: 21 checks.** See `docs/READINESS_2026-10-02.md` for exercised routes and workflows. Corporate and agency journeys ran through the real UI; three independently generated presets passed install/build/API/backup checks. Safari/Firefox, exhaustive accessibility and every original buyer setting have not been browser-tested.
+The current browser matrix is `npm run test:browser:all` (Chromium, Firefox and WebKit); `npm run test:browser` runs Chromium only. Read the 2026-10-04 report for the actually completed engine results and exact workflow list. The harness exercises real forms, persisted API outcomes, document downloads, role denial and console/page errors, separately from generated-package API/backup checks.
 
-The earlier managed-browser localhost block and broken binaries are historical. A functioning local Playwright/Chromium harness now starts the UI, API and Builder together and exercises actual navigation, forms, downloads and mock-user permissions. API tests and builds remain separate evidence.
+Responsive checks cover 1440×960, 1280×900, 768×1024 and 390×844 for Builder, ATS list/drawer/action modal and Careers. Tab/Shift+Tab, Escape and focus restoration are verified. Representative WCAG 2/2.1 A/AA axe scans cover overview, careers/application and Settings pipeline/form/approval/scorecard surfaces; exhaustive accessibility and native Safari/device certification remain outside those checks.
+
+Earlier cloud localhost blocks and damaged browser binaries are historical. The local harness works on the user's Mac with isolated services and synthetic records; it canonicalizes the macOS Firefox temporary-profile path and cleans its own artifacts.
 
 The macOS “buttons/page could not be displayed” issue was traced to the Vite proxy using `localhost:4000` while the API was bound to IPv4. The default proxy now uses `http://127.0.0.1:4000`, and a regression test proves it. This fix was confirmed by the real Mac browser harness on 2026-10-04.
 
@@ -453,7 +407,7 @@ The original interactive acceptance checklist (consult the latest report for exa
 16. Inspect browser console and network panel for runtime errors or failed API calls.
 17. Test responsive/mobile layouts and keyboard/accessibility fundamentals.
 
-`scripts/browser-acceptance.mjs` is the current verified entry point (`npm run test:browser`). Install Chromium with `npx playwright install chromium` first. `scripts/browser-check.mjs` is an older helper.
+`scripts/browser-acceptance.mjs` is the current verified entry point (`npm run test:browser`). Install the matrix engines with `npx playwright install chromium firefox webkit` first. `scripts/browser-check.mjs` is an older helper.
 
 ---
 
@@ -461,12 +415,12 @@ The original interactive acceptance checklist (consult the latest report for exa
 
 ### Highest priority
 
-1. **Maintain and broaden the passing browser suite.** The requested local readiness flows pass on the user's Mac. Extend cross-browser, keyboard/accessibility and less common workflow variants without claiming the current representative suite covers every original requirement.
-2. **Finish buyer-grade configurator depth.** The guided top-level flow is polished and progressive, but many advanced settings still depend on the in-app Settings/schema editing experience. Build focused business-friendly editors for the important deep areas instead of exposing raw JSON or giant generic forms.
+1. **Maintain and broaden acceptance.** The current report records actual engines, keyboard/axe states and four viewports. Extend uncommon workflows and device/accessibility coverage without treating representative checks as exhaustive.
+2. **Extend remaining business editors.** Dedicated pipeline/approval/form/scorecard editors are implemented; organization hierarchies, automations, communications, interview plans and job templates retain general editing surfaces. See the 50-area trace for consumers and gaps.
 3. **Make the live preview cover more of the ATS.** It currently demonstrates key pages/settings. Extend it so a buyer can preview the exact page/feature being configured—forms, candidate profile, scorecards, communications, offers, careers detail/application, agency screens, etc.—without pretending draft preview writes operational data.
 4. **Perform a hard-coded-string/list audit.** Centralize remaining terminology, statuses, taxonomies, employment types, sources, document categories, priorities, and reasons wherever company configuration should control them.
 5. **Perform module dependency acceptance.** Disabling a module must remove navigation and block related backend routes/actions without leaving dead links, orphan buttons, or contradictory settings.
-6. **Complete three full organization journeys.** Corporate, agency, and startup must differ operationally, not only by theme and visible menu.
+6. **Broaden complete organization journeys.** Corporate and agency have real browser workflows; all five presets have navigation and generated runtime/isolation evidence. Startup/campus/basic do not each have a separately scripted full hiring journey.
 7. **Polish deep operational UI.** Replace generic record-form behavior where a workflow deserves a purpose-built guided experience. Ensure loading, empty, validation, error, confirmation, and success states are clear.
 
 ### Production hardening after local product acceptance
