@@ -131,3 +131,70 @@ test('malformed collection shapes return validation errors instead of throwing',
     assert.ok(result.errors.length)
   })
 })
+
+test('buyer scorecards reject impossible bounds, incomplete labels, duplicate competencies and zero weights', () => {
+  const config = defaults('corporate')
+  const card = config.scorecards[0]
+  card.ratingScale = { min: 6, max: 1, labels: ['One'] }
+  card.competencies[0].weight = 0
+  card.competencies.push({ ...card.competencies[0] })
+  const result = validateConfig(config)
+  assert.equal(result.valid, false)
+  assert.ok(result.errors.some(error => error.includes('ordered integer bounds')))
+  assert.ok(result.errors.some(error => error.includes('one label per rating')))
+  assert.ok(result.errors.some(error => error.includes('weight must be positive')))
+  assert.ok(result.errors.some(error => error.includes('is duplicated')))
+  card.ratingScale = { min: 0, max: 2, labels: ['Low', 'Medium', 'High'] }
+  card.competencies = [{ id: 'skill', name: 'Skill', weight: 1 }]
+  assert.equal(validateConfig(config).valid, true)
+})
+
+test('form validation rejects cross-section answer collisions, dangling conditions and malformed sections', () => {
+  const config = defaults('corporate')
+  const form = config.applicationForms[0]
+  form.sections.push({ id: 'duplicate', fields: [{ field: 'email', label: 'Alternate email', type: 'email' }] }, null)
+  form.conditions = [{ targetField: 'missing-question', field: 'email', value: 'x' }]
+  form.knockoutQuestions = [{ field: 'missing-answer', rejectWhen: 'no' }]
+  const result = validateConfig(config)
+  assert.equal(result.valid, false)
+  assert.ok(result.errors.some(error => error.includes('duplicated across sections')))
+  assert.ok(result.errors.some(error => error.includes('unknown target question')))
+  assert.ok(result.errors.some(error => error.includes('must be an object')))
+  assert.ok(result.errors.some(error => error.includes('unknown answer question')))
+})
+
+test('approval references must match the module and supported runtime requirements', () => {
+  const config = defaults('corporate')
+  config.requisitions.approvalWorkflowId = config.offers.approvalWorkflowId
+  config.approvalWorkflows[0].threshold = -1
+  config.pipelines[0].stages[0].requires = ['unimplemented-check']
+  const result = validateConfig(config)
+  assert.ok(result.errors.some(error => error.includes('workflow for requisitions')))
+  assert.ok(result.errors.some(error => error.includes('nonnegative amount')))
+  assert.ok(result.errors.some(error => error.includes('unsupported requirement')))
+})
+
+test('regional and decision taxonomy validation rejects unusable input before activation', () => {
+  const config = defaults('corporate')
+  Object.assign(config.regional, { timezone: 'Invalid/Zone', numberLocale: 'invalid_locale', workingDays: ['1', 1], workingHours: { start: '25:30', end: '17:00' } })
+  config.taxonomies.rejectionReasons = ['Duplicate', 'Duplicate']
+  const result = validateConfig(config)
+  assert.ok(result.errors.some(error => error.includes('valid IANA')))
+  assert.ok(result.errors.some(error => error.includes('valid locale')))
+  assert.ok(result.errors.some(error => error.includes('unique day numbers')))
+  assert.ok(result.errors.some(error => error.includes('HH:mm')))
+  assert.ok(result.errors.some(error => error.includes('unique, nonempty reasons')))
+})
+
+test('public forms reserve required identity keys, one upload, and usable consent', () => {
+  const config = defaults('corporate')
+  const form = config.applicationForms[0]
+  const fields = form.sections[0].fields
+  fields.find(field => field.field === 'email').field = 'workEmail'
+  fields.push({ field: 'certificate', label: 'Certificate', type: 'file', required: true })
+  form.conditions.push({ targetField: 'consent', field: 'phone', operator: 'isNotEmpty' })
+  const result = validateConfig(config)
+  assert.ok(result.errors.some(error => error.includes('required email identity')))
+  assert.ok(result.errors.some(error => error.includes('one file upload')))
+  assert.ok(result.errors.some(error => error.includes('identity or privacy consent')))
+})

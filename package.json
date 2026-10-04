@@ -15,7 +15,7 @@
     "local": "node scripts/platform-dev.mjs",
     "config:validate": "node builder/validate-config.mjs",
     "test": "node --test config/*.test.js src/**/*.test.js",
-    "test:platform": "node --test builder/*.test.cjs tests/platform.acceptance.test.cjs tests/configuration-matrix.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js",
+    "test:platform": "node --test builder/*.test.cjs tests/platform.acceptance.test.cjs tests/configuration-matrix.test.cjs shared/ats-config.test.cjs shared/*.test.mjs server/src/platform/*.test.js",
     "test:generated": "node scripts/generated-matrix.mjs",
     "test:browser": "node scripts/browser-acceptance.mjs",
     "test:browser:all": "node scripts/browser-matrix.mjs",

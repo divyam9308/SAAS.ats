@@ -31,7 +31,7 @@ function validateTransition(config, application, targetStage, store) {
 
   const roleId = application.__actorRole || ''
   const transitions = pipeline.transitions
-  if (Array.isArray(transitions) && transitions.length && !transitions.some(t =>
+  if (Array.isArray(transitions) && !transitions.some(t =>
     (t.from === stageKey(current) || t.from === application.stage) && (t.to === stageKey(target) || t.to === targetStage))) {
     throw new WorkflowError('This configured pipeline transition is not permitted.', 409)
   }
@@ -42,14 +42,14 @@ function validateTransition(config, application, targetStage, store) {
     throw new WorkflowError(`Moving from ${stageLabel(current)} to ${stageLabel(target)} is not permitted.`, 409)
   }
   const currentIndex = stages.indexOf(current), targetIndex = stages.indexOf(target)
-  if ((!Array.isArray(transitions) || !transitions.length) && (!current.allowedTransitions || !current.allowedTransitions.length) && targetIndex !== currentIndex + 1 && targetIndex !== currentIndex) {
+  if (!Array.isArray(transitions) && (!current.allowedTransitions || !current.allowedTransitions.length) && targetIndex !== currentIndex + 1 && targetIndex !== currentIndex) {
     throw new WorkflowError('Applications must move through pipeline stages in order.', 409)
   }
 
   const requirements = [...(target.requires || []), ...(target.requirements || target.requiredActions || [])]
   for (const item of requirements) {
     const requirement = typeof item === 'string' ? item : (item?.type || item?.id || item?.action)
-    if (requirement === 'feedback' && !store.list('feedback').some(f => f.applicationId === application.id && f.status === 'submitted')) {
+    if (['feedback', 'scorecard'].includes(requirement) && !store.list('feedback').some(f => f.applicationId === application.id && f.status === 'submitted')) {
       throw new WorkflowError('Submit required interview feedback before moving this application.', 409)
     }
     if (requirement === 'interview' && !store.list('interviews').some(i => i.applicationId === application.id && i.status === 'completed')) {
@@ -58,14 +58,40 @@ function validateTransition(config, application, targetStage, store) {
     if (requirement === 'approval' && !store.list('approvals').some(a => a.applicationId === application.id && a.status === 'approved') && !store.list('offers').some(o => o.applicationId === application.id && ['sent', 'accepted'].includes(o.status))) {
       throw new WorkflowError('Complete the configured approval before moving this application.', 409)
     }
+    if (requirement === 'client') {
+      const clientId = application.clientId || job.clientId
+      const client = clientId && store.get('clients', clientId)
+      if (!client || client.archivedAt) throw new WorkflowError('Link this application to an active client before moving it into this stage.', 409)
+    }
+    if (requirement === 'placement') {
+      const placementExists = store.list('placements').some(placement => {
+        const status = String(placement.status || '').toLowerCase()
+        if (placement.archivedAt || !['active', 'placed'].includes(status)) return false
+        return placement.applicationId === application.id || Boolean(
+          application.candidateId && application.jobId &&
+          placement.candidateId === application.candidateId && placement.jobId === application.jobId
+        )
+      })
+      if (!placementExists) throw new WorkflowError('Create an active placement for this application before moving it into this stage.', 409)
+    }
+    if (!['feedback', 'scorecard', 'interview', 'approval', 'client', 'placement'].includes(requirement)) {
+      throw new WorkflowError(`Unsupported application stage requirement: ${String(requirement || 'unknown')}.`, 422)
+    }
   }
   return { target, pipeline }
 }
 
 function findApprovalWorkflow(config, kind, record) {
-  const id = kind === 'requisitions' ? config?.requisitions?.approvalWorkflowId : kind === 'offers' ? config?.offers?.approvalWorkflowId : null
-  const workflows = config?.approvalWorkflows || []
-  return (id && workflows.find(flow => flow.id === id)) || workflows.find(flow => flow.module === kind) || null
+  const policy = kind === 'requisitions' ? config?.requisitions : kind === 'offers' ? config?.offers : null
+  const workflows = Array.isArray(config?.approvalWorkflows) ? config.approvalWorkflows : []
+  if (policy && Object.hasOwn(policy, 'approvalWorkflowId')) {
+    const id = policy.approvalWorkflowId
+    if (typeof id !== 'string' || !id.trim()) return null
+    const selected = workflows.find(flow => flow.id === id && flow.module === kind)
+    if (!selected) throw new WorkflowError(`The selected approval workflow is not configured for ${kind}.`, 422)
+    return selected
+  }
+  return workflows.find(flow => flow.module === kind) || null
 }
 function amountFor(kind, record) {
   if (kind === 'requisitions') return Number(record.budget ?? record.salaryBand?.max ?? record.salaryBand ?? 0)
@@ -127,7 +153,8 @@ function approveRecord(store, kind, record, actionName, payload, context, audit)
   const needed = workflowApplies(workflow, kind, record, context.config) ? steps : []
 
   if (!needed.length) {
-    if (!workflow && !completedBy.length && !context.canApproveAny) throw new WorkflowError('No approval workflow is configured for this record.', 409)
+    const optionalOfferApproval = kind === 'offers' && context.config?.offers?.requireApproval === false
+    if (!workflow && !completedBy.length && !context.canApproveAny && !optionalOfferApproval) throw new WorkflowError('No approval workflow is configured for this record.', 409)
     if (!context.canApproveAny && !hasRolePermission(context.user, kind, context.config)) throw new WorkflowError('Your role cannot approve this record.', 403)
     const status = actionName === 'reject' ? 'rejected' : approvalOutcome(kind)
     const updated = store.put(kind, { ...record, status, approvalsCompleted: completedBy.includes(context.user.id) ? completedBy : [...completedBy, context.user.id], approvedAt: actionName === 'approve' ? now() : undefined, rejectedBy: actionName === 'reject' ? context.user.id : undefined, rejectionReason: actionName === 'reject' ? (payload.reason || '') : undefined, workflowBypassed: Boolean(workflow && !steps.length || workflow && !workflowApplies(workflow, kind, record, context.config)) }, context.user.id)
@@ -193,7 +220,11 @@ function action(store, kind, record, actionName, payload = {}, context) {
   if (kind === 'offers' && ['approve', 'reject', 'delegate'].includes(actionName)) return approveRecord(store, kind, record, actionName, payload, context, addAudit)
 
   if (kind === 'requisitions' && actionName === 'create-job') {
-    if (record.status !== 'approved') throw new WorkflowError('Only an approved hiring request can create a job.')
+    if (['rejected', 'converted'].includes(record.status)) throw new WorkflowError('This hiring request cannot create a job in its current state.')
+    const workflow = findApprovalWorkflow(context.config, kind, record)
+    const approvalRequired = workflowApplies(workflow, kind, record, context.config)
+    if (approvalRequired && record.status !== 'approved') throw new WorkflowError('Only an approved hiring request can create a job.')
+    if (!approvalRequired && !['approved', 'draft', 'pending'].includes(record.status)) throw new WorkflowError('This hiring request cannot create a job in its current state.')
     if (record.jobId) return store.get('jobs', record.jobId)
     const job = store.put('jobs', { title: record.title, department: record.department, team: record.team, location: record.location, employmentType: record.employmentType || record.jobType, openings: record.headcount || 1, salaryBand: record.salaryBand, currency: record.currency, hiringManagerId: record.hiringManagerId, recruiterId: record.recruiterId, description: record.description || record.justification, status: 'draft', visibility: 'private', pipelineId: record.pipelineId, requisitionId: record.id, customFields: record.customFields || {} }, actor)
     store.put(kind, { ...record, jobId: job.id, status: 'converted' }, actor)
@@ -219,14 +250,22 @@ function action(store, kind, record, actionName, payload = {}, context) {
 
   if (kind === 'applications' && ['reject', 'withdraw'].includes(actionName)) {
     if (['hired', 'rejected', 'withdrawn'].includes(record.status)) throw new WorkflowError('This application has already been closed.')
+    const reasonCategory = payload.reasonCategory
+    if (reasonCategory !== undefined) {
+      const taxonomy = actionName === 'reject' ? 'rejectionReasons' : 'withdrawalReasons'
+      const categories = context.config?.taxonomies?.[taxonomy]
+      if (typeof reasonCategory !== 'string' || !Array.isArray(categories) || !categories.includes(reasonCategory)) {
+        throw new WorkflowError(`Choose a configured ${actionName === 'reject' ? 'rejection' : 'withdrawal'} reason category.`, 422)
+      }
+    }
     const status = actionName === 'reject' ? 'rejected' : 'withdrawn'
     const endedAt = now()
     const history = normalizeStageHistory(record, endedAt)
     const openIndex = findOpenStage(history, record.stage)
     if (openIndex >= 0) history[openIndex] = { ...history[openIndex], leftAt: endedAt }
     history.push({ stageId: status, enteredAt: endedAt, leftAt: null })
-    const updated = store.put(kind, { ...record, stageHistory: history, status, endReason: payload.reason || null, endedAt }, actor)
-    addAudit(`application.${status}`, { reason: payload.reason })
+    const updated = store.put(kind, { ...record, stageHistory: history, status, endReason: payload.reason || null, endReasonCategory: reasonCategory ?? null, endedAt }, actor)
+    addAudit(`application.${status}`, { reason: payload.reason, reasonCategory: reasonCategory ?? null })
     return updated
   }
 

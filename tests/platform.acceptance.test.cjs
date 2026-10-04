@@ -55,11 +55,87 @@ test('platform router leaves interview reminders disabled by default in acceptan
   assert.equal(notifications.data.some(row => row.kind === 'interview_reminder'), false);
 });
 
+test('bootstrap counts honor module-specific scope and deny counts for unreadable modules', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    const recruiter = config.roles.find(role => role.id === 'recruiter');
+    recruiter.scope = 'all';
+    recruiter.scopes = { candidates: 'owned', applications: 'owned' };
+  }, { seedDemo: false });
+  for (const [name, ownerId] of [['Owned candidate', 'demo-recruiter'], ['Other candidate', 'demo-hr-head']]) {
+    assert.equal((await request('/records/candidates', { method: 'POST', body: { data: { name, ownerId } } })).status, 201);
+  }
+  const visible = await request('/records/candidates', { user: 'demo-recruiter' });
+  assert.equal(visible.data.length, 1);
+  const recruiter = await request('/bootstrap', { user: 'demo-recruiter' });
+  assert.equal(recruiter.data.counts.candidates, visible.data.length);
+  const finance = await request('/bootstrap', { user: 'demo-finance' });
+  assert.equal(finance.data.counts.candidates, 0);
+  const admin = await request('/bootstrap');
+  assert.equal(admin.data.counts.candidates, 2);
+});
+
+test('interview presentation resolves the job assessment without projecting private job data', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.scorecards.push({ ...structuredClone(config.scorecards[0]), id: 'job-assessment', name: 'Job assessment' });
+  });
+  const interview = (await request('/records/interviews')).data[0];
+  assert.ok(interview.jobId);
+  const job = await request(`/records/jobs/${interview.jobId}`, { method: 'PATCH', body: { data: { scorecardId: 'job-assessment' } } });
+  assert.equal(job.status, 200, JSON.stringify(job.payload));
+  const presented = await request(`/records/interviews/${interview.id}`);
+  assert.equal(presented.status, 200);
+  assert.equal(presented.data.scorecardId, 'job-assessment');
+  assert.equal(Object.hasOwn(presented.data, 'job'), false);
+  assert.equal(Object.hasOwn(presented.data, 'salary'), false);
+  const listed = (await request('/records/interviews')).data.find(row => row.id === interview.id);
+  assert.equal(listed.scorecardId, 'job-assessment');
+});
+
 test('production auth boundary fails closed when no real adapter is configured', async t => {
   const { request } = await instance(t, 'corporate', () => {}, { demoAuthEnabled: false });
   const response = await request('/bootstrap');
   assert.equal(response.status, 503);
   assert.equal(response.payload.error, 'Production authentication adapter is not configured');
+});
+
+test('role-scoped bootstrap includes safe runtime choices without exposing integration settings', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.sources = [{ id: 'custom-referral', name: 'Custom referral', enabled: true }];
+    config.tasks.priorities = ['critical', 'standard'];
+    config.documents.categories = ['Resume', 'Custom ID'];
+    config.integrations = { smtp: { apiKey: 'do-not-project-runtime-secrets' }, google: { clientSecret: 'also-secret' } };
+  });
+  const response = await request('/bootstrap', { user: 'demo-recruiter' });
+  assert.equal(response.status, 200, JSON.stringify(response.payload));
+  assert.deepEqual(response.data.config.sources, [{ id: 'custom-referral', name: 'Custom referral', enabled: true }]);
+  assert.deepEqual(response.data.config.tasks.priorities, ['critical', 'standard']);
+  assert.deepEqual(response.data.config.documents.categories, ['Resume', 'Custom ID']);
+  assert.equal(response.data.config.integrations, undefined);
+  assert.equal(JSON.stringify(response.payload).includes('do-not-project-runtime-secrets'), false);
+  assert.equal(JSON.stringify(response.payload).includes('also-secret'), false);
+});
+
+test('disabling requisition approvals permits draft conversion while configured approvals still block it', async t => {
+  const requestData = {
+    title: 'Approval mode conversion', departmentId: 'unit-engineering', locationId: 'location-hq',
+    headcount: 1, justification: 'Create a role for the platform team.', employmentType: 'full-time'
+  };
+  const withoutApproval = await instance(t, 'corporate', config => { config.requisitions.approvalWorkflowId = ''; });
+  const draft = await withoutApproval.request('/records/requisitions', { method: 'POST', body: { data: requestData } });
+  assert.equal(draft.status, 201, JSON.stringify(draft.payload));
+  assert.equal(draft.data.status, 'draft');
+  assert.ok(withoutApproval.config.approvalWorkflows.some(flow => flow.id === 'requisition-approval'), 'Preset definition remains available but unselected');
+  const converted = await withoutApproval.request(`/actions/requisitions/${draft.data.id}/create-job`, { method: 'POST', body: { data: {} } });
+  assert.equal(converted.status, 200, JSON.stringify(converted.payload));
+  assert.equal(converted.data.requisitionId, draft.data.id);
+
+  const withApproval = await instance(t, 'corporate');
+  const pending = await withApproval.request('/records/requisitions', { method: 'POST', body: { data: requestData } });
+  assert.equal(pending.status, 201, JSON.stringify(pending.payload));
+  assert.equal(pending.data.status, 'pending');
+  const blocked = await withApproval.request(`/actions/requisitions/${pending.data.id}/create-job`, { method: 'POST', body: { data: {} } });
+  assert.equal(blocked.status, 409, JSON.stringify(blocked.payload));
+  assert.equal((await withApproval.request('/records/jobs')).data.some(job => job.requisitionId === pending.data.id), false);
 });
 
 test('public application endpoint rate limits repeated submissions by address', async t => {
@@ -71,6 +147,83 @@ test('public application endpoint rate limits repeated submissions by address', 
   assert.equal((await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body })).status, 201);
   const blocked = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body });
   assert.equal(blocked.status, 429);
+});
+
+test('public application form conditions gate required fields, screening, and persisted answers', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.applicationForms = [{
+      id: 'conditional-public-form', name: 'Conditional public form', isDefault: true,
+      sections: [{ fields: [
+        { field: 'fullName', label: 'Full name', type: 'shortText', required: true },
+        { field: 'email', label: 'Email', type: 'email', required: true },
+        { field: 'hasPortfolio', label: 'Has portfolio', type: 'checkbox' },
+        { field: 'portfolio', label: 'Portfolio', type: 'shortText', required: true, condition: { field: 'hasPortfolio', value: true } },
+        { field: 'phone', label: 'Phone', type: 'phone', condition: { field: 'hasPortfolio', value: true } },
+        { field: 'screeningEnabled', label: 'Show authorization question', type: 'checkbox' },
+        { field: 'workAuthorization', label: 'Work authorization', type: 'singleSelect', condition: { field: 'screeningEnabled', value: true } },
+        { field: 'consentVisible', label: 'Show consent', type: 'checkbox' },
+        { field: 'consent', label: 'Consent', type: 'checkbox', required: true, condition: { field: 'consentVisible', value: true } }
+      ] }], conditions: [],
+      knockoutQuestions: [{ field: 'workAuthorization', label: 'Work authorization', type: 'singleSelect', rejectWhen: 'no', message: 'Work authorization is required.' }]
+    }];
+  });
+  const job = (await request('/public/jobs', { user: 'public' })).data[0];
+  const hidden = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body: { data: {
+    fullName: 'Hidden Conditional Applicant', email: 'hidden-conditional@example.test', consent: true,
+    answers: { hasPortfolio: false, portfolio: 'hidden value', phone: '555-0102', screeningEnabled: false, workAuthorization: 'no' }
+  } } });
+  assert.equal(hidden.status, 201, JSON.stringify(hidden.payload));
+  const application = (await request('/records/applications')).data.find(row => row.id === hidden.data.applicationId);
+  const candidate = (await request('/records/candidates')).data.find(row => row.id === hidden.data.candidateId);
+  assert.equal(application.answers.portfolio, undefined);
+  assert.equal(application.answers.phone, undefined);
+  assert.equal(application.answers.workAuthorization, undefined);
+  assert.equal(candidate.phone, '');
+
+  const visible = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body: { data: {
+    fullName: 'Visible Conditional Applicant', email: 'visible-conditional-success@example.test', consent: true,
+    answers: { hasPortfolio: true, portfolio: 'https://portfolio.example.test', phone: '555-0103', screeningEnabled: true, workAuthorization: 'yes' }
+  } } });
+  assert.equal(visible.status, 201, JSON.stringify(visible.payload));
+  const visibleApplication = (await request('/records/applications')).data.find(row => row.id === visible.data.applicationId);
+  const visibleCandidate = (await request('/records/candidates')).data.find(row => row.id === visible.data.candidateId);
+  assert.equal(visibleApplication.answers.portfolio, 'https://portfolio.example.test');
+  assert.equal(visibleCandidate.phone, '555-0103');
+
+  const visibleRequired = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body: { data: {
+    fullName: 'Visible Conditional Applicant', email: 'visible-conditional@example.test', consent: true,
+    answers: { hasPortfolio: true }
+  } } });
+  assert.equal(visibleRequired.status, 422, JSON.stringify(visibleRequired.payload));
+  assert.match(visibleRequired.payload.error, /incomplete or invalid/i);
+
+  const visibleKnockout = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body: { data: {
+    fullName: 'Visible Screening Applicant', email: 'visible-screening@example.test', consent: true,
+    answers: { hasPortfolio: false, screeningEnabled: true, workAuthorization: 'no' }
+  } } });
+  assert.equal(visibleKnockout.status, 422, JSON.stringify(visibleKnockout.payload));
+  assert.equal(visibleKnockout.payload.error, 'Work authorization is required.');
+});
+
+test('a hidden consent answer cannot bypass required privacy consent', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.applicationForms = [{
+      id: 'conditional-consent-form', name: 'Conditional consent form', isDefault: true,
+      sections: [{ fields: [
+        { field: 'fullName', label: 'Full name', type: 'shortText', required: true },
+        { field: 'email', label: 'Email', type: 'email', required: true },
+        { field: 'consentVisible', label: 'Show consent', type: 'checkbox' },
+        { field: 'consent', label: 'Consent', type: 'checkbox', required: true, condition: { field: 'consentVisible', value: true } }
+      ] }], conditions: [], knockoutQuestions: []
+    }];
+  });
+  const job = (await request('/public/jobs', { user: 'public' })).data[0];
+  const response = await request(`/public/jobs/${job.id}/apply`, { user: 'public', method: 'POST', body: { data: {
+    fullName: 'Consent Bypass Applicant', email: 'consent-hidden@example.test',
+    answers: { consentVisible: false, consent: true }
+  } } });
+  assert.equal(response.status, 422);
+  assert.match(response.payload.error, /Privacy consent is required/i);
 });
 
 test('interview schedule writes validate calendar policy, prevent participant and room overlaps, and keep mock event history', async t => {
@@ -256,6 +409,53 @@ test('bulk actions enforce row access, validate the whole request, and roll back
   assert.equal(rollback.status, 422, JSON.stringify(rollback.payload));
   assert.deepEqual((await request(`/records/candidates/${seeded.id}`)).data.tags, before.data.tags);
   assert.deepEqual((await request(`/records/candidates/${outside.data.id}`)).data.tags, secondBefore.data.tags);
+});
+
+test('team document histories and downloads honor visibility and parent record scope', async t => {
+  const { request } = await instance(t, 'corporate', config => {
+    config.documents.allowReplacement = true;
+    config.documents.categories = ['Resume', 'Other', 'Cover letter'];
+  });
+  const readableCandidate = await request('/records/candidates', { method: 'POST', body: { data: { name: 'Team Scope Candidate', ownerId: 'demo-recruiter' } } });
+  assert.equal(readableCandidate.status, 201, JSON.stringify(readableCandidate.payload));
+  const teamV1 = await request(`/records/candidates/${readableCandidate.data.id}/documents`, { method: 'POST', body: { data: {
+    filename: 'team-v1.txt', category: 'Resume', visibility: 'team', contentBase64: Buffer.from('team version one').toString('base64'), mimeType: 'text/plain'
+  } } });
+  assert.equal(teamV1.status, 201, JSON.stringify(teamV1.payload));
+  const teamV2 = await request(`/records/candidates/${readableCandidate.data.id}/documents`, { method: 'POST', body: { data: {
+    filename: 'team-v2.txt', replacesDocumentId: teamV1.data.id, category: 'Resume', visibility: 'team', contentBase64: Buffer.from('team version two').toString('base64'), mimeType: 'text/plain'
+  } } });
+  assert.equal(teamV2.status, 201, JSON.stringify(teamV2.payload));
+  const teamVersions = await request(`/documents/${teamV2.data.id}/versions`, { user: 'demo-hr-head' });
+  assert.equal(teamVersions.status, 200, JSON.stringify(teamVersions.payload));
+  assert.deepEqual(teamVersions.data.map(version => version.id), [teamV1.data.id, teamV2.data.id]);
+  for (const [document, expected] of [[teamV1.data, 'team version one'], [teamV2.data, 'team version two']]) {
+    const downloaded = await request(`/documents/${document.id}/download`, { user: 'demo-hr-head' });
+    assert.equal(downloaded.status, 200, JSON.stringify(downloaded.payload));
+    assert.equal(downloaded.data, expected);
+  }
+
+  for (const visibility of ['restricted', 'private']) {
+    const category = visibility === 'restricted' ? 'Other' : 'Cover letter';
+    const restricted = await request(`/records/candidates/${readableCandidate.data.id}/documents`, { method: 'POST', body: { data: {
+      filename: `${visibility}.txt`, category, visibility, contentBase64: Buffer.from(`${visibility} bytes`).toString('base64'), mimeType: 'text/plain'
+    } } });
+    assert.equal(restricted.status, 201, JSON.stringify(restricted.payload));
+    assert.equal((await request(`/documents/${restricted.data.id}/versions`, { user: 'demo-hr-head' })).status, 404);
+    assert.equal((await request(`/documents/${restricted.data.id}/download`, { user: 'demo-hr-head' })).status, 404);
+  }
+
+  const outOfScopeCandidate = await request('/records/candidates', { method: 'POST', body: { data: { name: 'Out of Scope Candidate', ownerId: 'demo-hr-head' } } });
+  assert.equal(outOfScopeCandidate.status, 201, JSON.stringify(outOfScopeCandidate.payload));
+  for (const visibility of ['team', 'public']) {
+    const category = visibility === 'team' ? 'Resume' : 'Cover letter';
+    const document = await request(`/records/candidates/${outOfScopeCandidate.data.id}/documents`, { method: 'POST', body: { data: {
+      filename: `scope-${visibility}.txt`, category, visibility, contentBase64: Buffer.from('out of scope bytes').toString('base64'), mimeType: 'text/plain'
+    } } });
+    assert.equal(document.status, 201, JSON.stringify(document.payload));
+    const denied = await request(`/documents/${document.data.id}/download`, { user: 'demo-recruiter' });
+    assert.equal(denied.status, 404, JSON.stringify(denied.payload));
+  }
 });
 
 test('bulk stage moves validate all transitions and owner assignment uses configured ownership fields', async t => {

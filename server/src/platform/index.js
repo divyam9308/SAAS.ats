@@ -4,7 +4,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const { openDatabase, createStore, seedCompany, RECORD_KINDS, now, uid, parseJson } = require('./database');
-const { hasPermission, canAccessRecord, maskRecord, moduleEnabled } = require('./authorization');
+const { hasPermission, canAccessRecord, maskRecord, moduleEnabled, recordScope } = require('./authorization');
 const { action: workflowAction, WorkflowError } = require('./workflows');
 const dataAdmin = require('./data-admin');
 const { runAutomations, normalizeTrigger } = require('./automation');
@@ -32,12 +32,18 @@ const { activateConfiguration, syncConfiguredUsers } = require('./config-lifecyc
 const { inspectDocument, localDocumentScanner } = require('./document-security');
 const { acquirePlatformRuntimeLock } = require('./runtime-lock');
 const { projectRecordLabels } = require('./record-presentation');
+const { canViewDocument } = require('./document-access');
+const { resolveScorecard } = require('./scorecard-engine');
 
 const COMPANY = 'local-company';
 const TIMELINE_KINDS = RECORD_KINDS.filter(kind => !['audit', 'outbox', 'automations', 'notifications', 'notes', 'documents', 'savedViews'].includes(kind));
 const CAPABILITIES = { timelineKinds: TIMELINE_KINDS };
 const send = (res, data, status = 200) => res.status(status).json({ data });
 const fail = (res, status, error) => res.status(status).json({ error: String(error) });
+const asyncRoute = handler => (req, res, next) => Promise.resolve().then(() => handler(req, res, next)).catch(error => {
+  if (res.headersSent) return next(error);
+  return fail(res, error.status || 500, error.status ? error.message : 'Request could not be completed');
+});
 const clean = value => JSON.parse(JSON.stringify(value));
 
 const AUTOMATION_OWNER_FIELDS = new Set(['ownerId', 'recruiterId', 'hiringManagerId', 'coordinatorId', 'sourcingOwnerId', 'backupOwnerId', 'assignedTo', 'assigneeId']);
@@ -63,6 +69,18 @@ function expectedAutomationTargetKind(rule, event) {
   if (event === 'interview.feedback_submitted') return 'feedback';
   const prefix = String(event).split('.')[0];
   return AUTOMATION_TRIGGER_KINDS[prefix] || null;
+}
+function selectedApprovalWorkflow(config, kind) {
+  const policy = kind === 'requisitions' ? config?.requisitions : kind === 'offers' ? config?.offers : null;
+  const workflows = Array.isArray(config?.approvalWorkflows) ? config.approvalWorkflows : [];
+  if (policy && Object.hasOwn(policy, 'approvalWorkflowId')) {
+    const id = policy.approvalWorkflowId;
+    if (typeof id !== 'string' || !id.trim()) return null;
+    const selected = workflows.find(flow => flow.id === id);
+    if (!selected || selected.module !== kind) throw new WorkflowError(`The selected approval workflow is not configured for ${kind}.`, 422);
+    return selected;
+  }
+  return workflows.find(flow => flow.module === kind) || null;
 }
 function automationActionAuthorization(action = {}, targetKind) {
   const type = String(action.type || action.action || '').replace(/[-\s]/g, '_').toLowerCase();
@@ -133,8 +151,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     }
     let related = { ...record };
     if (kind === 'referrals') related.ownerId = record.referrerId;
-    const role = req.config.roles?.find(r => r.id === req.actor.roleId);
-    const scope = role?.scope || 'all';
+    const scope = recordScope(req.actor, { __kind: kind }, req.config);
     if (kind === 'applications') {
       const job = record.jobId && store.get('jobs', record.jobId);
       if (job) related = { ...related, recruiterId: related.recruiterId || related.ownerId || job.recruiterId, hiringManagerId: related.hiringManagerId || job.hiringManagerId, departmentId: related.departmentId || job.departmentId, department: related.department || job.department, locationId: related.locationId || job.locationId, location: related.location || job.location };
@@ -160,13 +177,94 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     for (const field of ['id', 'name', 'fullName', 'firstName', 'lastName', 'title', 'currentTitle', 'skills', 'location', 'city', 'country', 'updatedAt', 'lastActivityAt']) if (candidate[field] !== undefined) projection[field] = candidate[field];
     return [{ ...member, candidate: projection }];
   }) });
-  const visibleRecord = (req, kind, row) => masked(req, projectRecordLabels(kind, kind === 'talentPools' ? projectPool(req, row) : row, { get: (linkedKind, id) => store.get(linkedKind, id), canView: linkedKind => moduleEnabled(req.config, linkedKind) && hasPermission(req.actor, `${linkedKind}:view`, req.config), readable: (linkedKind, linked) => readable(req, linked, linkedKind), users: req.localsUsers }));
+  const visibleRecord = (req, kind, row) => {
+    let presented = kind === 'talentPools' ? projectPool(req, row) : row;
+    if (kind === 'interviews') {
+      const job = row.jobId ? store.get('jobs', row.jobId) : null;
+      const roleId = row.roleId || job?.roleId || job?.jobRoleId;
+      const role = roleId ? req.config.roles?.find(item => item.id === roleId) || { id: roleId } : null;
+      // Authorized interviewers need the effective assessment definition, without
+      // fetching or exposing the job's private details.
+      const scorecard = resolveScorecard(req.config, row, { job, role });
+      if (scorecard) presented = { ...row, scorecardId: scorecard.id };
+    }
+    return masked(req, projectRecordLabels(kind, presented, { get: (linkedKind, id) => store.get(linkedKind, id), canView: linkedKind => moduleEnabled(req.config, linkedKind) && hasPermission(req.actor, `${linkedKind}:view`, req.config), readable: (linkedKind, linked) => readable(req, linked, linkedKind), users: req.localsUsers }));
+  };
   const visibleList = (req, kind) => store.list(kind).filter(row => readable(req, row, kind)).map(row => visibleRecord(req, kind, row));
   const visibleCount = (req, kind) => {
-    const role = req.config.roles?.find(item => item.id === req.actor.roleId);
-    // An all-scope count needs no record materialization or label projection.
-    // Scoped roles still use the exact row-level predicate so counts cannot leak.
-    return !['owned', 'assigned', 'department', 'location'].includes(role?.scope) ? store.count(kind) : visibleList(req, kind).length;
+    if (!moduleEnabled(req.config, kind)) return 0;
+    // Saved views use their target module's permission and have owner-only privacy.
+    if (kind === 'savedViews') return req.config.savedViews?.enabled === false ? 0 : store.list(kind).filter(row => readable(req, row, kind)).length;
+    if (!hasPermission(req.actor, `${kind}:view`, req.config)) return 0;
+    const role = req.config.roles?.find(item => item.id === (req.actor.roleId || req.actor.role));
+    const globalPermissions = role?.permissions?.['*'] || [];
+    const unrestrictedAdmin = (globalPermissions.includes('*') || globalPermissions.includes('administer'))
+      && RECORD_KINDS.every(recordKind => recordScope(req.actor, { __kind: recordKind }, req.config) === 'all');
+    // Only an unrestricted administrator can bypass row privacy and related scopes.
+    // All other users share the list endpoint's predicate, without label projection.
+    return unrestrictedAdmin ? store.count(kind) : store.list(kind).filter(row => readable(req, row, kind)).length;
+  };
+  const runtimeDefinitions = (actor, configData) => {
+    const allowed = (kind, actions) => moduleEnabled(configData, kind) && actions.some(action => hasPermission(actor, `${kind}:${action}`, configData));
+    const runtime = {};
+    const taxonomies = {};
+    if (allowed('candidates', ['view', 'create', 'edit']) || allowed('applications', ['view', 'create', 'edit'])) {
+      if (Array.isArray(configData.sources)) runtime.sources = configData.sources.map(source => ({
+        ...(source?.id != null ? { id: source.id } : {}),
+        ...(source?.name != null ? { name: source.name } : {}),
+        ...(source?.label != null ? { label: source.label } : {}),
+        ...(source?.enabled != null ? { enabled: source.enabled } : {})
+      }));
+      if (allowed('applications', ['view', 'create', 'edit'])) {
+        for (const key of ['rejectionReasons', 'withdrawalReasons']) if (Array.isArray(configData.taxonomies?.[key])) taxonomies[key] = configData.taxonomies[key];
+      }
+    }
+    if (allowed('documents', ['view', 'create'])) {
+      const documents = configData.documents || {};
+      const categories = documents.categories || configData.taxonomies?.documentCategories;
+      runtime.documents = {
+        ...(Array.isArray(categories) ? { categories } : {}),
+        ...(Array.isArray(documents.allowedVisibilities) ? { allowedVisibilities: documents.allowedVisibilities } : {}),
+        ...(Array.isArray(documents.visibilityOptions) ? { visibilityOptions: documents.visibilityOptions } : {}),
+        ...(Array.isArray(documents.visibilities) ? { visibilities: documents.visibilities } : {}),
+        ...(documents.defaultVisibility != null ? { defaultVisibility: documents.defaultVisibility } : {}),
+        ...(documents.allowReplacement != null ? { allowReplacement: Boolean(documents.allowReplacement) } : {}),
+        ...(documents.maxFileSizeBytes != null ? { maxFileSizeBytes: documents.maxFileSizeBytes } : {}),
+        ...(documents.maxFileSizeMb != null ? { maxFileSizeMb: documents.maxFileSizeMb } : {})
+      };
+    }
+    if (allowed('tasks', ['view', 'create', 'edit'])) {
+      const tasks = configData.tasks || {};
+      runtime.tasks = { ...(Array.isArray(tasks.priorities) ? { priorities: tasks.priorities } : {}), ...(Array.isArray(tasks.statuses) ? { statuses: tasks.statuses } : {}) };
+    }
+    if (allowed('referrals', ['view', 'create', 'edit'])) {
+      const referrals = configData.referrals || {};
+      runtime.referrals = {
+        ...(Array.isArray(referrals.milestones) ? { milestones: referrals.milestones } : {}),
+        ...(Array.isArray(referrals.payoutStatuses) ? { payoutStatuses: referrals.payoutStatuses } : {}),
+        ...(Array.isArray(referrals.rewards) ? { rewards: referrals.rewards } : {})
+      };
+    }
+    if (allowed('offers', ['view', 'create'])) {
+      const offers = configData.offers || {};
+      runtime.offers = {
+        ...(offers.currency != null ? { currency: offers.currency } : {}),
+        ...(offers.expiryDays != null ? { expiryDays: offers.expiryDays } : {}),
+        ...(offers.requireApproval != null ? { requireApproval: Boolean(offers.requireApproval) } : {}),
+        ...(Array.isArray(offers.compensationComponents) ? { compensationComponents: offers.compensationComponents } : {}),
+        ...(offers.mockDocumentGeneration != null ? { mockDocumentGeneration: Boolean(offers.mockDocumentGeneration) } : {})
+      };
+    }
+    if (allowed('notifications', ['view'])) {
+      const notifications = configData.notifications || {};
+      runtime.notifications = {
+        ...(Array.isArray(notifications.channels) ? { channels: notifications.channels } : {}),
+        ...(notifications.preferences && typeof notifications.preferences === 'object' ? { preferences: notifications.preferences } : {})
+      };
+    }
+    if (Array.isArray(runtime.documents?.categories)) taxonomies.documentCategories = runtime.documents.categories;
+    if (Object.keys(taxonomies).length) runtime.taxonomies = taxonomies;
+    return runtime;
   };
   const noteParent = note => {
     const kind = note.relatedKind || (note.candidateId ? 'candidates' : note.jobId ? 'jobs' : note.applicationId ? 'applications' : note.clientId ? 'clients' : note.offerId ? 'offers' : null);
@@ -595,7 +693,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const actorRole = configData.roles?.find(r => r.id === req.actor.roleId) || {};
     const visibleUsers = users().map(u => ({ id: u.id, name: u.name, roleId: u.roleId, departmentId: u.departmentId, locationId: u.locationId }));
     if (!hasPermission(req.actor, 'dashboard:view', configData)) {
-      const navConfig = { company: configData.company, branding: configData.branding, terminology: configData.terminology, regional: configData.regional, modules: configData.modules, pipelines: configData.pipelines, scorecards: configData.scorecards, interviews: configData.interviews, roles: [actorRole], users: visibleUsers };
+      const navConfig = { company: configData.company, branding: configData.branding, terminology: configData.terminology, regional: configData.regional, modules: configData.modules, pipelines: configData.pipelines, scorecards: configData.scorecards, interviews: configData.interviews, roles: [actorRole], users: visibleUsers, ...runtimeDefinitions(req.actor, configData) };
       return send(res, { config: navConfig, configVersion: cfgRow().active_version, capabilities: CAPABILITIES, user: req.actor, users: visibleUsers, modules: configData.modules, counts: {}, role: { id: actorRole.id, name: actorRole.name, permissions: actorRole.permissions } });
     }
     const canReadOrganization = hasPermission(req.actor, 'organization:view', configData) || hasPermission(req.actor, 'organization:administer', configData);
@@ -604,7 +702,8 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       organization: { units: configData.organization?.units || [], locations: configData.organization?.locations || [] }, employmentTypes: configData.employmentTypes,
       customFields: { jobs: configData.customFields?.jobs || [], candidates: configData.customFields?.candidates || [], requisitions: configData.customFields?.requisitions || [] },
       pipelines: configData.pipelines, applicationForms: configData.applicationForms, scorecards: configData.scorecards,
-      interviewPlans: configData.interviewPlans, jobTemplates: configData.jobTemplates, taxonomies: configData.taxonomies,
+      interviewPlans: configData.interviewPlans, jobTemplates: configData.jobTemplates,
+      ...runtimeDefinitions(req.actor, configData),
       roles: [actorRole], users: visibleUsers
     };
     const countObj = Object.fromEntries(RECORD_KINDS.map(kind => [kind, visibleCount(req, kind)]));
@@ -776,15 +875,16 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
         initial.calendarEvent = createMockCalendarEvent(initial, { workspaceId: req.config.workspaceId || req.config.company?.id || COMPANY, now: now() });
       }
       if (kind === 'offers') {
-        const flow = (req.config.approvalWorkflows || []).find(item => item.id === req.config.offers?.approvalWorkflowId);
         if (req.config.offers?.requireApproval) {
+          const flow = selectedApprovalWorkflow(req.config, 'offers');
+          if (!flow) throw new WorkflowError('An offer approval workflow is required.', 422);
           initial.status = 'pending_approval';
           initial.approvals = (flow?.steps || []).map(step => step.userId || step.roleId);
           initial.approvalsCompleted = [];
         } else initial.status = 'draft';
       }
       if (kind === 'requisitions') {
-        const flow = (req.config.approvalWorkflows || []).find(item => item.id === req.config.requisitions?.approvalWorkflowId);
+        const flow = selectedApprovalWorkflow(req.config, 'requisitions');
         initial.status = flow?.steps?.length ? 'pending' : 'draft';
         initial.approvals = (flow?.steps || []).map(step => step.userId || step.roleId);
         initial.approvalsCompleted = [];
@@ -1151,7 +1251,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
   router.get('/public/company', (req, res) => { if (!moduleEnabled(config(), 'careers')) return fail(res, 404, 'Careers site is disabled'); send(res, publicCompany(config())); });
   router.get('/public/jobs', (req, res) => send(res, store.list('jobs').filter(j => j.status === 'open' && j.visibility === 'public' && moduleEnabled(config(), 'careers')).map(j => publicJob(j, config()))));
   router.get('/public/jobs/:id', (req, res) => { const job = store.get('jobs', req.params.id); if (!job || job.status !== 'open' || job.visibility !== 'public' || !moduleEnabled(config(), 'careers')) return fail(res, 404, 'Job not found'); send(res, publicJob(job, config())); });
-  router.post('/public/jobs/:id/apply', (req, res) => {
+  router.post('/public/jobs/:id/apply', asyncRoute(async (req, res) => {
     const timestamp = Date.now();
     const windowMs = 15 * 60 * 1000;
     const limit = Math.max(1, Number(config().security?.publicApplicationLimit) || 20);
@@ -1170,11 +1270,14 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const form = (cfg.applicationForms || []).find(f => f.id === job.applicationFormId) || cfg.applicationForms?.[0];
     const answers = data.answers && typeof data.answers === 'object' ? { ...data, ...data.answers } : { ...data };
     if (data.email !== undefined) answers.email = data.email;
-    const formFields = (form?.sections || []).flatMap(section => section.fields || []).filter(field => fieldIsApplicable(field, answers));
+    let isApplicationFieldVisible;
+    try { ({ isApplicationFieldVisible } = await import('../../../shared/application-conditions.mjs')); }
+    catch { return fail(res, 500, 'Public application validation is unavailable'); }
+    const formFields = (form?.sections || []).flatMap(section => section.fields || []).filter(field => isApplicationFieldVisible(field, form, answers));
     const uploadField = preferredApplicationUploadField(formFields);
     const uploadFieldId = uploadField && applicationFieldId(uploadField);
     const configuredUpload = uploadFieldId ? answers[uploadFieldId] : null;
-    const applicationUpload = isFileUpload(configuredUpload) ? configuredUpload : isFileUpload(data.resume) ? data.resume : null;
+    const applicationUpload = uploadFieldId && (isFileUpload(configuredUpload) ? configuredUpload : isFileUpload(data.resume) ? data.resume : null);
     // The careers UI submits the selected file through the canonical `resume`
     // transport key. Map it back to the configured file field before validation
     // so buyers can rename the field without changing the storage contract.
@@ -1184,7 +1287,12 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     if (uploadFieldId && answers[uploadFieldId] != null && !isFileUpload(answers[uploadFieldId])) return fail(res, 422, `${uploadField.label || uploadFieldId} must include a filename and file content`);
     if (!data.email || !data.fullName) return fail(res, 422, 'Full name and email are required');
     if (cfg.privacy?.consentRequired !== false && data.consent !== true) return fail(res, 422, 'Privacy consent is required');
-    const knockout = (form?.knockoutQuestions || []).find(q => knockoutTriggered(q, answers));
+    const knockout = (form?.knockoutQuestions || []).find(q => {
+      const questionId = applicationFieldId(q);
+      const backingField = (form?.sections || []).flatMap(section => section.fields || []).find(field => applicationFieldId(field) === questionId);
+      const backingVisible = !backingField || formFields.includes(backingField);
+      return backingVisible && isApplicationFieldVisible(q, form, answers) && knockoutTriggered(q, answers);
+    });
     if (knockout) return fail(res, 422, knockout.message || 'Your response does not meet this role’s application requirements');
     const normalizedEmail = String(data.email).trim().toLowerCase();
     const prepared = publicApplicant.preparePublicApplication({
@@ -1206,7 +1314,8 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     let transactionOpen = false;
     try {
       db.exec('BEGIN IMMEDIATE'); transactionOpen = true;
-      candidate = store.put('candidates', { name: prepared.candidateDetails.name, email: prepared.candidateDetails.email, phone: prepared.candidateDetails.phone, consentStatus: data.consent ? 'granted' : 'pending', source: careerSourceLabel, ownerId: null }, 'public');
+      const phoneIsVisible = formFields.some(field => applicationFieldId(field) === 'phone');
+      candidate = store.put('candidates', { name: prepared.candidateDetails.name, email: prepared.candidateDetails.email, phone: phoneIsVisible ? (answers.phone ?? prepared.candidateDetails.phone) : '', consentStatus: data.consent ? 'granted' : 'pending', source: careerSourceLabel, ownerId: null }, 'public');
       const app = store.put('applications', { candidateId: candidate.id, jobId: job.id, stage: pipeline?.stages?.[0]?.id || pipeline?.stages?.[0]?.name || 'applied', status: 'active', source: careerSourceLabel, pipelineId: pipeline?.id, ownerId: job.recruiterId || null, answers: cleanAnswers }, 'public');
       if (applicationUpload) document = attachDocument(store, applicationUpload, { candidateId: candidate.id, applicationId: app.id }, dataDir, 'public', cfg, scanDocument);
       audit('public', 'application.submitted', 'applications', app.id, { jobId: job.id });
@@ -1218,7 +1327,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
       if (document?.storageName) fs.rmSync(path.join(dataDir, path.basename(document.storageName)), { force: true });
       fail(res, error.status || 422, error.message);
     }
-  });
+  }));
 
   router.post('/referrals/submit', (req, res) => {
     if (!permitted(req, res, 'referrals', 'create')) return;
@@ -1293,13 +1402,13 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const parentId = doc.relatedId || doc.applicationId || doc.candidateId || doc.jobId;
     const parent = parentKind && parentId ? store.get(parentKind, parentId) : null;
     const parentAllowed = !parentKind ? doc.ownerId === req.actor.id : Boolean(parent && readable(req, parent, parentKind));
-    const visibilityAllowed = doc.visibility === 'public' || doc.ownerId === req.actor.id || hasPermission(req.actor, 'documents:administer', req.config);
+    const visibilityAllowed = canViewDocument(doc, req.actor, (actor, permission) => hasPermission(actor, permission, req.config));
     if (!parentAllowed || !visibilityAllowed) return fail(res, 404, 'Document not found');
     const rootId = doc.rootDocumentId || doc.id;
     const versions = store.list('documents', { includeArchived: true })
       .filter(version => (version.rootDocumentId || version.id) === rootId
         && version.relatedKind === doc.relatedKind && version.relatedId === doc.relatedId
-        && (version.visibility === 'public' || version.ownerId === req.actor.id || hasPermission(req.actor, 'documents:administer', req.config)))
+        && canViewDocument(version, req.actor, (actor, permission) => hasPermission(actor, permission, req.config)))
       .sort((a, b) => Number(a.version || 1) - Number(b.version || 1));
     send(res, versions.map(version => masked(req, version)));
   });
@@ -1311,7 +1420,7 @@ function createPlatformRouter({ dbPath, dataDir = path.join(process.cwd(), 'serv
     const parentId = doc.relatedId || doc.applicationId || doc.candidateId || doc.jobId;
     const parent = parentKind && parentId ? store.get(parentKind, parentId) : null;
     const parentAllowed = !parentKind ? doc.ownerId === req.actor.id : Boolean(parent && readable(req, parent, parentKind));
-    const visibilityAllowed = doc.visibility === 'public' || doc.ownerId === req.actor.id || hasPermission(req.actor, 'documents:administer', req.config);
+    const visibilityAllowed = canViewDocument(doc, req.actor, (actor, permission) => hasPermission(actor, permission, req.config));
     if (!parentAllowed || !visibilityAllowed) return fail(res, 404, 'Document not found');
     const file = path.join(dataDir, path.basename(doc.storageName || ''));
     if (!doc.storageName || !fs.existsSync(file)) return fail(res, 404, 'Document file is missing');
@@ -1394,9 +1503,11 @@ function validateNewRecord(kind, data, config, store) {
     if (config.requisitions?.requireJustification && !String(data.justification || '').trim()) throw new WorkflowError('A justification is required for hiring requests.', 422);
     if (config.requisitions?.requireBudget && data.budget == null) throw new WorkflowError('A budget is required for hiring requests.', 422);
     if (config.requisitions?.requireTargetDate && !data.targetDate) throw new WorkflowError('A target date is required for hiring requests.', 422);
-    const flow = (config.approvalWorkflows || []).find(item => item.id === config.requisitions?.approvalWorkflowId);
+    const flow = selectedApprovalWorkflow(config, 'requisitions');
+    if (config.requisitions && Object.hasOwn(config.requisitions, 'approvalWorkflowId') && config.requisitions.approvalWorkflowId && !flow) throw new WorkflowError('The selected approval workflow is not configured for requisitions.', 422);
     if (flow?.steps?.length && data.status && data.status !== 'pending') throw new WorkflowError('Hiring requests must enter the configured approval workflow.', 409);
   }
+  if (kind === 'offers' && config.offers?.requireApproval && !selectedApprovalWorkflow(config, 'offers')) throw new WorkflowError('An offer approval workflow is required.', 422);
   if (kind === 'jobs' && data.pipelineId && !config.pipelines?.some(p => p.id === data.pipelineId)) throw new WorkflowError('Unknown configured pipeline.', 422);
   if (kind === 'jobs' && data.status === 'open' && data.requisitionId && store.get('requisitions', data.requisitionId)?.status !== 'approved') throw new WorkflowError('Approve the requisition before opening its job.', 409);
 }
@@ -1520,18 +1631,6 @@ function referralResponse(referral) {
     if (referral?.[key] !== undefined) result[key] = referral[key];
   }
   return result;
-}
-function fieldIsApplicable(field, answers) {
-  const condition = field.condition || field.when;
-  if (!condition || typeof condition !== 'object') return true;
-  const actual = answers[condition.field || condition.key]; const expected = condition.value;
-  switch (condition.operator || 'equals') {
-    case 'notEquals': return actual !== expected;
-    case 'contains': return Array.isArray(actual) ? actual.includes(expected) : String(actual || '').includes(String(expected));
-    case 'truthy': return Boolean(actual);
-    case 'falsy': return !actual;
-    default: return actual === expected;
-  }
 }
 function applicationFieldId(field) {
   return String(field?.id || field?.key || field?.field || '');

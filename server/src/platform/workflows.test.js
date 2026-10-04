@@ -45,6 +45,62 @@ test('pipeline transitions enforce configured edges, stage roles, and requiremen
   assert.equal(validateTransition(config, { ...app, __actorRole: 'recruiter' }, 'interview', store).target.id, 'interview')
 })
 
+test('scorecard is a compatibility alias for submitted feedback requirements', () => {
+  const application = { id: 'a', jobId: 'j', candidateId: 'c', pipelineId: 'p', stage: 'screening' }
+  const config = { pipelines: [{ id: 'p', stages: [{ id: 'screening' }, { id: 'interview', requires: ['scorecard'] }] }] }
+  assert.throws(() => validateTransition(config, application, 'interview', memoryStore({ jobs: [{ id: 'j' }] })), error => error instanceof WorkflowError && error.status === 409)
+  assert.doesNotThrow(() => validateTransition(config, application, 'interview', memoryStore({
+    jobs: [{ id: 'j' }], feedback: [{ id: 'f', applicationId: 'a', status: 'submitted' }]
+  })))
+})
+
+test('an explicit empty transition graph denies moves while legacy missing graphs retain sequential moves', () => {
+  const store = memoryStore()
+  const pipeline = { id: 'p', stages: [{ id: 'applied' }, { id: 'screening' }, { id: 'hired' }], transitions: [] }
+  const config = { pipelines: [pipeline] }
+  const application = { id: 'a', pipelineId: 'p', stage: 'applied' }
+  rejectStatus(() => validateTransition(config, application, 'screening', store), 409)
+  delete pipeline.transitions
+  assert.equal(validateTransition(config, application, 'screening', store).target.id, 'screening')
+  rejectStatus(() => validateTransition(config, application, 'hired', store), 409)
+})
+
+test('client requirements resolve an active client through application or job', () => {
+  const application = { id: 'a', jobId: 'j', candidateId: 'c', pipelineId: 'p', stage: 'screening' }
+  const config = { pipelines: [{ id: 'p', stages: [{ id: 'screening' }, { id: 'submitted', requires: ['client'] }] }] }
+  assert.throws(() => validateTransition(config, application, 'submitted', memoryStore({ jobs: [{ id: 'j' }] })), error => error instanceof WorkflowError && error.status === 409)
+  assert.throws(() => validateTransition(config, application, 'submitted', memoryStore({
+    jobs: [{ id: 'j', clientId: 'client' }], clients: [{ id: 'client', archivedAt: '2026-01-01T00:00:00.000Z' }]
+  })), error => error instanceof WorkflowError && error.status === 409)
+  assert.doesNotThrow(() => validateTransition(config, application, 'submitted', memoryStore({
+    jobs: [{ id: 'j', clientId: 'client' }], clients: [{ id: 'client', status: 'active' }]
+  })))
+})
+
+test('placement requirements match this application or its candidate and job and require an active placement', () => {
+  const application = { id: 'a', jobId: 'j', candidateId: 'c', pipelineId: 'p', stage: 'interview' }
+  const config = { pipelines: [{ id: 'p', stages: [{ id: 'interview' }, { id: 'placed', requires: ['placement'] }] }] }
+  assert.throws(() => validateTransition(config, application, 'placed', memoryStore({ jobs: [{ id: 'j' }] })), error => error instanceof WorkflowError && error.status === 409)
+  assert.throws(() => validateTransition(config, application, 'placed', memoryStore({
+    jobs: [{ id: 'j' }], placements: [{ id: 'cancelled', applicationId: 'a', status: 'cancelled' }]
+  })), error => error instanceof WorkflowError && error.status === 409)
+  assert.throws(() => validateTransition(config, application, 'placed', memoryStore({
+    jobs: [{ id: 'j' }], placements: [{ id: 'unrelated', candidateId: 'other', jobId: 'j', status: 'placed' }]
+  })), error => error instanceof WorkflowError && error.status === 409)
+  assert.doesNotThrow(() => validateTransition(config, application, 'placed', memoryStore({
+    jobs: [{ id: 'j' }], placements: [{ id: 'same-pair', candidateId: 'c', jobId: 'j', status: 'placed' }]
+  })))
+  assert.doesNotThrow(() => validateTransition(config, application, 'placed', memoryStore({
+    jobs: [{ id: 'j' }], placements: [{ id: 'same-app', applicationId: 'a', status: 'active' }]
+  })))
+})
+
+test('unknown application stage requirements fail closed', () => {
+  const application = { id: 'a', jobId: 'j', pipelineId: 'p', stage: 'screening' }
+  const config = { pipelines: [{ id: 'p', stages: [{ id: 'screening' }, { id: 'next', requires: ['unsupported-policy'] }] }] }
+  assert.throws(() => validateTransition(config, application, 'next', memoryStore({ jobs: [{ id: 'j' }] })), error => error instanceof WorkflowError && error.status === 422)
+})
+
 test('sequential approval checks approver role and completes only after each configured step', () => {
   const store = memoryStore()
   const config = { requisitions: { approvalWorkflowId: 'req' }, approvalWorkflows: [{ id: 'req', module: 'requisitions', sequential: true, steps: [{ roleId: 'manager' }, { roleId: 'hr' }] }], roles: [] }
@@ -106,6 +162,57 @@ test('configured approvers may reject and record the rejection reason', () => {
   const rejected = action(memoryStore(), 'offers', { id: 'o', status: 'pending_approval' }, 'reject', { reason: 'Outside budget' }, context(config, 'hr', 'hr-user'))
   assert.equal(rejected.status, 'rejected')
   assert.equal(rejected.rejectionReason, 'Outside budget')
+})
+
+test('an explicit empty approval workflow reference disables legacy definition fallback', () => {
+  const store = memoryStore()
+  const config = {
+    requisitions: { approvalWorkflowId: '' },
+    approvalWorkflows: [{ id: 'legacy-requisition', module: 'requisitions', steps: [{ roleId: 'manager' }] }],
+    roles: [{ id: 'manager', permissions: { requisitions: ['approve'] } }]
+  }
+  const record = { id: 'req-disabled', status: 'pending', approvals: ['manager'] }
+  rejectStatus(() => action(store, 'requisitions', record, 'approve', {}, context(config, 'manager', 'manager-user')), 409)
+  assert.equal(store.get('requisitions', record.id), null)
+})
+
+test('an explicitly selected approval workflow must match the record module', () => {
+  const store = memoryStore()
+  const config = {
+    requisitions: { approvalWorkflowId: 'offer-flow' },
+    approvalWorkflows: [{ id: 'offer-flow', module: 'offers', steps: [{ roleId: 'manager' }] }],
+    roles: [{ id: 'manager', permissions: { requisitions: ['approve'] } }]
+  }
+  const record = { id: 'req-wrong-flow', status: 'pending' }
+  for (const reference of ['offer-flow', 'missing-flow']) {
+    config.requisitions.approvalWorkflowId = reference
+    for (const operation of ['approve', 'create-job']) rejectStatus(() => action(store, 'requisitions', record, operation, {}, context(config, 'manager', 'manager-user')), 422)
+  }
+  assert.equal(store.get('requisitions', record.id), null)
+  assert.deepEqual(store.list('jobs'), [])
+})
+
+test('offers with approval disabled bypass a stale workflow definition', () => {
+  const store = memoryStore()
+  const config = {
+    offers: { approvalWorkflowId: '', requireApproval: false },
+    approvalWorkflows: [{ id: 'offer-flow', module: 'offers', steps: [{ roleId: 'manager' }] }],
+    roles: [{ id: 'manager', permissions: { offers: ['approve'] } }]
+  }
+  const sent = action(store, 'offers', { id: 'offer-optional', status: 'draft' }, 'approve', {}, context(config, 'manager', 'manager-user'))
+  assert.equal(sent.status, 'sent')
+  assert.equal(sent.workflowBypassed, false)
+})
+
+test('legacy approval configs without an explicit reference still use the module workflow', () => {
+  const store = memoryStore()
+  const config = {
+    approvalWorkflows: [{ id: 'legacy-offer', module: 'offers', steps: [{ roleId: 'manager' }] }],
+    roles: [{ id: 'manager', permissions: { offers: ['approve'] } }]
+  }
+  const sent = action(store, 'offers', { id: 'legacy', status: 'pending_approval' }, 'approve', {}, context(config, 'manager', 'manager-user'))
+  assert.equal(sent.status, 'sent')
+  assert.deepEqual(sent.approvalsCompleted, ['manager-user'])
 })
 
 test('threshold approvals are bypassed below the configured amount', () => {

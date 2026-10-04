@@ -312,6 +312,16 @@ function validateConfig(config) {
   if (!String(config.company?.name || '').trim()) errors.push('company.name is required.')
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(config.company?.slug || ''))) errors.push('company.slug must contain lowercase letters, numbers, and hyphens.')
   for (const key of ['primaryColor', 'secondaryColor', 'accentColor']) if (!/^#[0-9a-f]{6}$/i.test(String(config.branding?.[key] || ''))) errors.push(`branding.${key} must be a six-digit hex color.`)
+  const regional = config.regional || {}
+  if (!/^[A-Z]{3}$/.test(String(regional.currency || ''))) errors.push('regional.currency must be a three-letter currency code.')
+  try { new Intl.DateTimeFormat('en-US', { timeZone: regional.timezone }).format(0); if (!regional.timezone) throw new Error() } catch { errors.push('regional.timezone must be a valid IANA time zone.') }
+  for (const key of ['language', 'numberLocale']) {
+    try { if (typeof regional[key] !== 'string' || !regional[key] || !Intl.getCanonicalLocales(regional[key]).length) throw new Error() } catch { errors.push(`regional.${key} must be a valid locale code.`) }
+  }
+  if (!['12h', '24h'].includes(regional.timeFormat)) errors.push('regional.timeFormat must be 12h or 24h.')
+  if (typeof regional.dateFormat !== 'string' || !['YYYY', 'MM', 'DD'].every(token => regional.dateFormat.split(token).length === 2)) errors.push('regional.dateFormat must contain YYYY, MM, and DD once each.')
+  if (!Array.isArray(regional.workingDays) || !regional.workingDays.length || regional.workingDays.some(day => !Number.isInteger(day) || day < 0 || day > 6) || !unique(regional.workingDays)) errors.push('regional.workingDays must contain unique day numbers from 0 (Sunday) to 6 (Saturday).')
+  for (const key of ['start', 'end']) if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(regional.workingHours?.[key] || ''))) errors.push(`regional.workingHours.${key} must be a valid HH:mm time.`)
   if (!isObject(config.modules) || Object.entries(config.modules).some(([, value]) => typeof value !== 'boolean')) errors.push('modules must map feature names to booleans.')
   if (config.mode === 'corporate' && config.modules?.agency) warnings.push('Agency module is enabled in corporate mode; agency workflows and permissions will also be available.')
   if (config.mode === 'agency' && !config.modules?.agency) errors.push('Agency mode requires the agency module to be enabled.')
@@ -377,6 +387,7 @@ function validateConfig(config) {
   const pipelineIds = checkUniqueIds(config.pipelines, 'pipelines')
   let defaultPipelines = 0
   for (const [i, pipeline] of asArray(config.pipelines).entries()) {
+    if (!isObject(pipeline)) { errors.push(`pipelines[${i}] must be an object.`); continue }
     if (!pipeline?.id || !String(pipeline.name || '').trim()) errors.push(`pipelines[${i}] requires id and name.`)
     if (pipeline.default) defaultPipelines++
     const stageIds = checkUniqueIds(pipeline.stages, `pipelines[${i}].stages`)
@@ -386,6 +397,7 @@ function validateConfig(config) {
       if (stage?.allowedRoles != null && !Array.isArray(stage.allowedRoles)) errors.push(`pipelines[${i}].stages[${j}].allowedRoles must be an array.`)
       for (const roleId of asArray(stage?.allowedRoles)) if (!roleIds.has(roleId)) errors.push(`pipelines[${i}].stages[${j}] references unknown role "${roleId}".`)
       if (stage?.requires != null && (!Array.isArray(stage.requires) || stage.requires.some(value => typeof value !== 'string' || !value.trim()))) errors.push(`pipelines[${i}].stages[${j}].requires must be an array of non-empty strings.`)
+      for (const requirement of asArray(stage?.requires)) if (!['interview', 'feedback', 'scorecard', 'approval', 'client', 'placement'].includes(requirement)) errors.push(`pipelines[${i}].stages[${j}].requires contains unsupported requirement "${requirement}".`)
     }
     if (pipeline.transitions != null && !Array.isArray(pipeline.transitions)) errors.push(`pipelines[${i}].transitions must be an array.`)
     const transitionKeys = new Set()
@@ -400,24 +412,63 @@ function validateConfig(config) {
   if (defaultPipelines !== 1) errors.push('Exactly one pipeline must be marked default.')
   for (const [bucket, fields] of Object.entries(config.customFields || {})) for (const error of validateFieldDefinitions(fields)) errors.push(`customFields.${bucket}${error}`)
   for (const [formIndex, form] of asArray(config.applicationForms).entries()) {
+    const formPath = `applicationForms[${formIndex}]`
+    if (!isObject(form)) { errors.push(`${formPath} must be an object.`); continue }
+    requireArray(form.sections, `${formPath}.sections`)
+    const answerKeys = new Set()
     for (const [sectionIndex, section] of asArray(form.sections).entries()) {
-      const fields = section.fields || []
+      if (!isObject(section)) { errors.push(`${formPath}.sections[${sectionIndex}] must be an object.`); continue }
+      const fields = section.fields
       for (const error of validateFieldDefinitions(fields)) errors.push(`applicationForms[${formIndex}].sections[${sectionIndex}].fields${error}`)
       for (const [fieldIndex, field] of asArray(fields).entries()) {
         const ids = [field?.id, field?.key, field?.field].filter(value => value != null && value !== '').map(String)
         if (new Set(ids).size > 1) errors.push(`applicationForms[${formIndex}].sections[${sectionIndex}].fields[${fieldIndex}] id, key, and field must agree.`)
+        const key = String(field?.field || field?.key || field?.id || '')
+        if (answerKeys.has(key)) errors.push(`${formPath} answer key "${key}" is duplicated across sections.`)
+        answerKeys.add(key)
       }
     }
+    const allFields = asArray(form.sections).flatMap(section => asArray(section?.fields))
+    for (const [key, types] of [['fullName', ['text', 'shortText']], ['email', ['email']]]) {
+      const identity = allFields.find(field => (field?.field || field?.key || field?.id) === key)
+      if (!identity || !types.includes(identity.type) || identity.required !== true) errors.push(`${formPath} must include the required ${key} identity question with its canonical answer key and type.`)
+      if (identity && (identity.enabled === false || identity.visible === false || identity.condition || identity.when || identity.conditions?.length)) errors.push(`${formPath}.${key} must remain visible without conditions.`)
+    }
+    if (allFields.filter(field => field?.type === 'file').length > 1) errors.push(`${formPath} supports one file upload question; use internal documents for additional attachments.`)
+    const consentKeys = new Set(allFields.filter(field => field?.type === 'checkbox' && /consent|privacy|agree/i.test(`${field.field || field.key || field.id} ${field.label}`)).map(field => field.field || field.key || field.id))
+    if (config.privacy?.consentRequired !== false) for (const field of allFields.filter(field => consentKeys.has(field?.field || field?.key || field?.id))) if (field.enabled === false || field.visible === false || field.condition || field.when || field.conditions?.length) errors.push(`${formPath} required privacy consent must remain visible without conditions.`)
+    const checkCondition = (condition, path, targetRequired = false) => {
+      if (!isObject(condition)) { errors.push(`${path} must be an object.`); return }
+      const rule = condition.when || condition
+      const source = rule.field || rule.key || rule.dependsOn
+      const target = condition.targetField || condition.fieldId || condition.target || condition.showField || condition.hideField || (condition.when ? condition.field : null)
+      if (!answerKeys.has(source)) errors.push(`${path} references an unknown answer question.`)
+      if ((targetRequired || target) && !answerKeys.has(target)) errors.push(`${path} references an unknown target question.`)
+      if (['fullName', 'email'].includes(target) || (config.privacy?.consentRequired !== false && consentKeys.has(target))) errors.push(`${path} cannot hide or conditionally show required identity or privacy consent questions.`)
+      if (!['equals', 'notEquals', 'not_equals', 'contains', 'truthy', 'falsy', 'isEmpty', 'isNotEmpty', 'eq', 'neq', 'in', 'not_in'].includes(rule.operator || 'equals')) errors.push(`${path}.operator is unsupported.`)
+    }
+    if (form.conditions != null) requireArray(form.conditions, `${formPath}.conditions`)
+    for (const [i, condition] of asArray(form.conditions).entries()) checkCondition(condition, `${formPath}.conditions[${i}]`, true)
+    for (const [i, field] of asArray(form.sections).flatMap(section => asArray(section?.fields)).entries()) {
+      if (field?.condition || field?.when) checkCondition(field.condition || field.when, `${formPath}.fields[${i}].condition`)
+      if (field?.conditions != null) requireArray(field.conditions, `${formPath}.fields[${i}].conditions`)
+      for (const [j, condition] of asArray(field?.conditions).entries()) checkCondition(condition, `${formPath}.fields[${i}].conditions[${j}]`)
+    }
+    if (form.knockoutQuestions != null) requireArray(form.knockoutQuestions, `${formPath}.knockoutQuestions`)
+    for (const [i, question] of asArray(form.knockoutQuestions).entries()) if (!answerKeys.has(question?.field || question?.key || question?.id)) errors.push(`${formPath}.knockoutQuestions[${i}] references an unknown answer question.`)
   }
   const workflowIds = new Set(asArray(config.approvalWorkflows).map(workflow => workflow?.id).filter(Boolean))
   checkUniqueIds(config.approvalWorkflows, 'approvalWorkflows')
   for (const [index, workflow] of asArray(config.approvalWorkflows).entries()) {
     if (!workflow?.id || !String(workflow.name || '').trim()) errors.push(`approvalWorkflows[${index}] requires id and name.`)
     if (!Array.isArray(workflow?.steps) || !workflow.steps.length) errors.push(`approvalWorkflows[${index}].steps must include at least one approver.`)
+    if (!['requisitions', 'offers', 'invoices'].includes(workflow?.module)) errors.push(`approvalWorkflows[${index}].module must be requisitions, offers, or invoices.`)
+    if (workflow?.threshold != null && (workflow.threshold === '' || !Number.isFinite(Number(workflow.threshold)) || Number(workflow.threshold) < 0)) errors.push(`approvalWorkflows[${index}].threshold must be a nonnegative amount or null.`)
     for (const step of asArray(workflow?.steps)) if (!roleIds.has(step?.roleId)) errors.push(`approvalWorkflows[${index}] references unknown role "${step?.roleId}".`)
   }
   if (config.requisitions?.approvalWorkflowId && !workflowIds.has(config.requisitions.approvalWorkflowId)) errors.push('requisitions.approvalWorkflowId references an unknown workflow.')
   if (config.offers?.approvalWorkflowId && !workflowIds.has(config.offers.approvalWorkflowId)) errors.push('offers.approvalWorkflowId references an unknown workflow.')
+  for (const module of ['requisitions', 'offers']) if (config[module]?.approvalWorkflowId && asArray(config.approvalWorkflows).find(workflow => workflow?.id === config[module].approvalWorkflowId)?.module !== module) errors.push(`${module}.approvalWorkflowId must reference a workflow for ${module}.`)
   if (config.modules?.offers && config.offers?.requireApproval && !config.offers?.approvalWorkflowId) errors.push('offers.approvalWorkflowId is required when offer approval is enabled.')
   for (const [index, delegation] of asArray(config.delegations).entries()) {
     if (!roleIds.has(delegation?.delegateRoleId)) errors.push(`delegations[${index}].delegateRoleId references an unknown role.`)
@@ -438,6 +489,21 @@ function validateConfig(config) {
   // Reusable templates must point at real platform definitions or activation would create broken jobs.
   const formIds = checkUniqueIds(config.applicationForms, 'applicationForms')
   const scorecardIds = checkUniqueIds(config.scorecards || [], 'scorecards')
+  for (const [index, scorecard] of asArray(config.scorecards).entries()) {
+    const path = `scorecards[${index}]`
+    if (!isObject(scorecard)) { errors.push(`${path} must be an object.`); continue }
+    if (!String(scorecard.name || '').trim()) errors.push(`${path}.name is required.`)
+    const scale = scorecard.ratingScale || {}
+    const min = Number(scale.min ?? 1), max = Number(scale.max ?? 5)
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || max < min || max - min > 99) errors.push(`${path}.ratingScale must have ordered integer bounds and at most 100 ratings.`)
+    if (Array.isArray(scale.labels) && scale.labels.length && scale.labels.length !== max - min + 1) errors.push(`${path}.ratingScale.labels must have one label per rating, starting at the lowest rating.`)
+    const competencies = scorecard.competencies || scorecard.criteria || []
+    checkUniqueIds(competencies, `${path}.competencies`)
+    if (!competencies.length) errors.push(`${path}.competencies must include at least one assessment item.`)
+    for (const [i, item] of asArray(competencies).entries()) if (item?.weight != null && (!Number.isFinite(Number(item.weight)) || Number(item.weight) <= 0)) errors.push(`${path}.competencies[${i}].weight must be positive.`)
+    if (scorecard.recommendations != null && (!Array.isArray(scorecard.recommendations) || !scorecard.recommendations.length || scorecard.recommendations.some(value => typeof value !== 'string' || !value.trim()) || !unique(scorecard.recommendations))) errors.push(`${path}.recommendations must contain unique, nonempty choices.`)
+  }
+  for (const key of ['rejectionReasons', 'withdrawalReasons']) if (config.taxonomies?.[key] != null && (!Array.isArray(config.taxonomies[key]) || config.taxonomies[key].some(value => typeof value !== 'string' || !value.trim()) || !unique(config.taxonomies[key]))) errors.push(`taxonomies.${key} must contain unique, nonempty reasons.`)
   const interviewPlanIds = checkUniqueIds(config.interviewPlans || [], 'interviewPlans')
   const employmentTypes = Array.isArray(config.employmentTypes) ? config.employmentTypes : []
   if (!Array.isArray(config.employmentTypes)) errors.push('employmentTypes must be an array.')

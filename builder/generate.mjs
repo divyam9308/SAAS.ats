@@ -76,7 +76,7 @@ async function acquireGenerationLock(slug) {
 }
 
 async function assertSourceTreeSafe() {
-  for (const entry of [...WORKSPACE_ENTRIES, 'shared/ats-config.cjs', 'shared/ats-config.test.cjs', 'tests/platform.acceptance.test.cjs', 'scripts/deployment-backup.mjs', 'docs/LOCAL_BACKUP_RESTORE.md']) {
+  for (const entry of [...WORKSPACE_ENTRIES, 'shared/ats-config.cjs', 'shared/ats-config.test.cjs', 'shared/application-conditions.mjs', 'shared/application-conditions.test.mjs', 'tests/platform.acceptance.test.cjs', 'scripts/deployment-backup.mjs', 'docs/LOCAL_BACKUP_RESTORE.md']) {
     const path = join(root, entry)
     if (await exists(path)) await assertCopySourcesSafe(path)
   }
@@ -208,6 +208,7 @@ async function copySource(destination) {
   await mkdir(join(destination, 'shared'), { recursive: true })
   await cp(join(root, 'shared', 'ats-config.cjs'), join(destination, 'shared', 'ats-config.cjs'))
   await cp(join(root, 'shared', 'ats-config.test.cjs'), join(destination, 'shared', 'ats-config.test.cjs'))
+  for (const entry of ['application-conditions.mjs', 'application-conditions.test.mjs']) await cp(join(root, 'shared', entry), join(destination, 'shared', entry))
   await mkdir(join(destination, 'scripts'), { recursive: true })
   await cp(join(root, 'scripts', 'deployment-backup.mjs'), join(destination, 'scripts', 'deployment-backup.mjs'))
   await cp(join(root, 'docs', 'LOCAL_BACKUP_RESTORE.md'), join(destination, 'LOCAL_BACKUP_RESTORE.md'))
@@ -253,7 +254,7 @@ async function writeStandaloneWorkspace(config, workspaceDirectory) {
   rootPackage.private = true
   rootPackage.engines = { node: '>=22.13' }
   rootPackage.dependencies = Object.fromEntries(Object.entries(rootPackage.dependencies).filter(([name]) => !['@supabase/supabase-js', '@vercel/speed-insights', 'recharts'].includes(name)))
-  rootPackage.scripts = { setup: 'npm ci && npm --prefix server ci', local: 'node scripts/platform-dev.mjs', 'backup:create': 'node scripts/deployment-backup.mjs backup', 'backup:preview': 'node scripts/deployment-backup.mjs preview', 'backup:restore': 'node scripts/deployment-backup.mjs restore --replace', dev: 'vite', build: 'vite build', test: 'node --test tests/platform.acceptance.test.cjs shared/ats-config.test.cjs server/src/platform/*.test.js', lint: 'eslint src/platform' }
+  rootPackage.scripts = { setup: 'npm ci && npm --prefix server ci', local: 'node scripts/platform-dev.mjs', 'backup:create': 'node scripts/deployment-backup.mjs backup', 'backup:preview': 'node scripts/deployment-backup.mjs preview', 'backup:restore': 'node scripts/deployment-backup.mjs restore --replace', dev: 'vite', build: 'vite build', test: 'node --test tests/platform.acceptance.test.cjs shared/ats-config.test.cjs shared/*.test.mjs src/platform/*.test.js server/src/platform/*.test.js', lint: 'eslint src/platform' }
   await writeFile(join(workspaceDirectory, 'package.json'), json(rootPackage))
   // Reuse the repository's pinned dependency graph. Generation must not depend
   // on a registry metadata cache having been warmed on the developer's machine.
