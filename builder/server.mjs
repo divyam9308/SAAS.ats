@@ -3,13 +3,13 @@ import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyCompanyConfig, applyFactoryConfig, generateCompanyPackage } from './generate.mjs'
-import { defaults, validateConfig } from '../shared/ats-config.cjs'
+import { defaults, migrateConfig, validateConfig } from '../shared/ats-config.cjs'
 
 const host = '127.0.0.1'
 const port = Number(process.env.ATS_BUILDER_PORT || 4177)
 const root = resolve(dirname(fileURLToPath(import.meta.url)))
 const repositoryRoot = resolve(root, '..')
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' }
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
 
 const send = (response, status, body, type = 'application/json; charset=utf-8') => {
   response.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
@@ -47,6 +47,11 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && request.url === '/api/validate') {
       const payload = await body(request)
       return send(response, 200, validateConfig(payload))
+    }
+    if (request.method === 'POST' && request.url === '/api/normalize') {
+      const config = migrateConfig(await body(request))
+      const validation = validateConfig(config)
+      return send(response, validation.valid ? 200 : 400, { ...validation, ...(validation.valid ? { config } : {}) })
     }
     if (request.method === 'POST' && request.url === '/api/generate') {
       const payload = await body(request)
@@ -86,8 +91,15 @@ const server = createServer(async (request, response) => {
       const asset = join(repositoryRoot, 'public', request.url)
       return send(response, 200, await readFile(asset), mime['.svg'])
     }
+    // Explicit shared presentation files keep draft preview copy identical to careers.
+    if (request.method === 'GET' && /^\/runtime\/(careers-presentation|regional-format)\.js$/.test(request.url || '')) {
+      return send(response, 200, await readFile(join(repositoryRoot, 'src/platform', request.url.split('/').at(-1))), mime['.js'])
+    }
+    if (request.method === 'GET' && request.url === '/fonts/dm-sans-latin.woff2') {
+      return send(response, 200, await readFile(join(repositoryRoot, 'public/fonts/dm-sans-latin.woff2')), mime['.woff2'])
+    }
     const pathname = request.url === '/' ? '/index.html' : String(request.url || '').split('?')[0]
-    if (!/^\/(index\.html|app\.js|styles\.css|entities\.css)$/.test(pathname)) return send(response, 404, 'Not found', 'text/plain')
+    if (!/^\/(index\.html|favicon\.svg|app\.js|workflow-model\.js|styles\.css|entities\.css)$/.test(pathname)) return send(response, 404, 'Not found', 'text/plain')
     const file = join(root, pathname)
     return send(response, 200, await readFile(file), mime[extname(file)] || 'application/octet-stream')
   } catch (error) {

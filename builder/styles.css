@@ -1,4 +1,5 @@
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fb;font-synthesis:none}
+@font-face{font-family:"DM Sans";src:url('/fonts/dm-sans-latin.woff2') format('woff2');font-weight:100 900;font-display:swap}
+:root{--builder-ink:#172033;--builder-muted:#59677a;--builder-line:#dfe5ee;--builder-page:#f5f7fb;--builder-primary:#2347c5;--builder-success:#0d6657;font-family:"DM Sans",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--builder-ink);background:var(--builder-page);font-synthesis:none}
 *{box-sizing:border-box}
 body{margin:0;min-width:320px;min-height:100vh}
 .shell{max-width:1320px;margin:auto;padding:28px 32px}
@@ -150,3 +151,45 @@ body{margin:0;min-width:320px;min-height:100vh}
 @media(max-width:1020px){.editor-preview-layout{grid-template-columns:1fr}.live-preview{position:static}.preview-frame,.mock-ats{min-height:520px;height:520px}.mock-body{height:466px}}
 @media(max-width:580px){.preview-toolbar{align-items:stretch;flex-direction:column}.preview-page-label select{width:100%}.preview-frame,.mock-ats{min-height:500px;height:500px}.mock-body{grid-template-columns:78px minmax(0,1fr);height:446px}.mock-nav{padding:8px 4px}.mock-nav button{padding:6px 5px}.mock-main{padding:9px}.mock-stats{grid-template-columns:1fr}.mock-stats article:last-child{grid-column:auto}.mock-list article{grid-template-columns:1fr}.mock-list article>span:nth-child(2){font-size:7px}}
 .brand small,#progress-percent,#steps button small,.preset-card span,.field small,.preview-caption,.page-footer{color:#59677a}.mock-brand small,.mock-page-heading small,.mock-stats small,.mock-stats span,.mock-chart small,.mock-list small,.chart-legend span,.mock-pipeline-meta{color:#526075}.mock-status{background:#e5f4ef;color:#0d6657}
+
+/* The editor follows the same quiet, readable workspace language as the ATS. */
+.shell{max-width:1580px;padding:24px 32px}
+.intro{padding:28px 0 24px}.intro h1{font-size:clamp(28px,3vw,36px)}
+.builder-layout{grid-template-columns:200px minmax(0,1fr);gap:24px}
+.editor-preview-layout{grid-template-columns:minmax(380px,1fr) minmax(350px,.94fr)}
+.wizard{padding:24px;min-width:0}.stepper{padding-top:16px}.step-heading p{font-size:13px;line-height:1.5}
+#steps button{padding:12px 8px}#steps button strong{font-size:12px}#steps button small{font-size:11px}
+.progress-copy{flex-wrap:wrap;gap:4px}.progress-copy span{font-size:11px}
+.preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.preset-card{padding:16px;gap:8px}.preset-card strong{font-size:14px}.preset-card span{font-size:12px;line-height:1.5}
+.field>span,.module-card strong{font-size:13px}.field input,.field select,.field textarea{font-size:14px;min-height:42px}
+.field textarea{width:100%;padding:10px 12px;border:1px solid #d5dce7;border-radius:8px;color:var(--builder-ink);font:inherit;resize:vertical}
+.field small,.module-card small,.editor-help{font-size:12px;line-height:1.5;color:var(--builder-muted)}
+.button{font-size:13px;min-height:42px}.header-actions a,.text-button{font-size:13px}.module-card{padding:16px}
+.module-grid{grid-template-columns:1fr}.workflow-note,.inline-warning,.warning-list,.success-banner,#status{font-size:12px;line-height:1.5}
+.workflow-editor{margin-top:24px}.workflow-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.workflow-editor-heading h3{margin:0;font-size:16px}.workflow-editor-heading p{margin:5px 0 0;font-size:12px;color:var(--builder-muted);line-height:1.5}
+.count-badge{flex-shrink:0;border-radius:20px;background:#eaf0fb;padding:5px 9px;font-size:11px;color:#294f9a}
+.pipeline-stage-list{display:grid;gap:10px;margin:16px 0}.pipeline-stage{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:10px;padding:14px;border:1px solid var(--builder-line);border-radius:10px;background:#fff}
+.stage-order{display:grid;place-items:center;width:26px;height:26px;background:#eaf0fb;border-radius:50%;font-size:12px;font-weight:700;color:#294f9a}
+.stage-actions{display:flex;gap:3px}.stage-action{display:grid;place-items:center;width:30px;height:34px;padding:0;border:1px solid var(--builder-line);border-radius:6px;background:#fff;color:#34415a;font:inherit;font-size:16px;cursor:pointer}
+.stage-action:hover{background:#f1f4f9}.stage-action:disabled{opacity:.4;cursor:default}.stage-action.danger{color:#a33b48}
+.stage-rules{grid-column:2/-1;font-size:12px}.stage-rules summary,.setup-disclosure summary{cursor:pointer;font-weight:700;color:#34415a}
+.stage-rules summary span{display:inline-block;margin-left:6px;font-size:11px;font-weight:400;color:var(--builder-muted)}
+.stage-rules fieldset,.workdays{border:1px solid var(--builder-line);border-radius:8px;padding:12px;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:10px}
+.stage-rules legend,.workdays legend{padding:0 4px;font-size:12px;font-weight:700;color:#34415a}
+.stage-rules label,.workdays label{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4}.stage-rules input,.workdays input{accent-color:var(--builder-primary);width:16px;height:16px}
+.workdays{margin-top:24px}.workdays p{width:100%;margin:0;font-size:12px;color:var(--builder-muted)}
+.setup-disclosure{margin-top:20px;padding:16px;border:1px solid var(--builder-line);border-radius:10px;background:#fbfcfe}
+.setup-disclosure summary{font-size:14px;line-height:1.5}.setup-disclosure summary>span{display:block;margin-top:3px;font-size:12px;font-weight:400;color:var(--builder-muted)}
+.setup-disclosure .button{margin-top:16px}.transition-list{display:grid;gap:6px;margin:12px 0}.transition-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--builder-line);border-radius:7px;background:#fff;font-size:12px}.transition-list b{margin:0 8px;color:#526075}
+.transition-create{display:grid;grid-template-columns:1fr 1fr;gap:10px}.transition-create .button{grid-column:1/-1;margin-top:0}
+.approval-setup{margin-top:18px;padding-bottom:16px;border-bottom:1px solid var(--builder-line)}.approval-setup:last-child{padding-bottom:0;border-bottom:0}.approval-chain{display:grid;gap:10px;padding-left:26px}.approval-chain li{padding-left:6px;color:#294f9a}
+.wizard-footer{position:sticky;bottom:0;background:#fff;z-index:2;padding-bottom:10px}.review-grid small{font-size:11px}.review-grid strong{font-size:15px}.review-grid span,.apply-option{font-size:13px}
+.preview-caption{font-size:11px;line-height:1.5}.preview-careers-logo{max-width:110px;max-height:32px;object-fit:contain;margin-bottom:12px}.preview-privacy{padding:8px;text-align:center;font-size:8px;color:var(--builder-muted)}
+.mock-kanban{overflow-x:auto;grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:minmax(92px,1fr);padding-bottom:8px}
+.result{margin-left:224px}.result p,.page-footer{font-size:12px}
+:where(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #2347c5;outline-offset:3px}
+@media(max-width:1200px){.editor-preview-layout{grid-template-columns:1fr}.live-preview{position:static}.preview-frame,.mock-ats{min-height:520px;height:520px}.mock-body{height:466px}}
+@media(max-width:840px){.shell{padding:20px 16px}.builder-layout{grid-template-columns:1fr;gap:16px}.intro{padding:24px 0}.result{margin-left:0}.wizard-footer{position:static}.stepper .danger-link{margin-top:10px}}
+@media(max-width:580px){.masthead{flex-direction:column;gap:14px}.header-actions{justify-content:flex-start;gap:12px}#steps{grid-template-columns:repeat(2,minmax(0,1fr))}#steps button strong{font-size:11px}.wizard{padding:18px}.form-grid,.review-grid,.preset-grid{grid-template-columns:1fr}.pipeline-stage{padding:10px;grid-template-columns:24px minmax(0,1fr);gap:8px}.stage-actions{grid-column:2}.stage-rules{grid-column:1/-1}.wizard-footer{align-items:flex-start;gap:8px}.wizard-footer>div{flex-direction:column;align-items:stretch}.wizard-footer .button{padding:0 10px;font-size:12px}.transition-create{grid-template-columns:1fr}.setup-disclosure{padding:12px}.stage-action{width:38px;height:38px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}

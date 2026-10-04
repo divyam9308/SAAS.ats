@@ -1,3 +1,6 @@
+import { approvalFor, approvalRoles, editPipeline, newStage, removeStage, reorderStage, selectedPipeline, setApprovalMode, setModule } from './workflow-model.js'
+import { resolveCareersCopy, safeCareersAssetUrl } from './runtime/careers-presentation.js'
+
 const $ = selector => document.querySelector(selector)
 const clone = value => structuredClone(value)
 const STORAGE_KEY = 'ats-platform-builder-draft-v2'
@@ -38,6 +41,8 @@ let config = null
 let stepIndex = 0
 let selectedPreviewPage = 'auto'
 let selectedPreviewVariant = 'auto'
+let selectedPipelineId = ''
+let reviewedSteps = new Set()
 
 const slugify = value => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
 const escapeHtml = value => String(value ?? '').replace(/[&<>"]/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[character])
@@ -54,6 +59,7 @@ function field(path, label, options = {}) {
   const required = options.required ? 'required' : ''
   const help = options.help ? `<small>${escapeHtml(options.help)}</small>` : ''
   if (options.type === 'select') return `<label class="field"><span>${escapeHtml(label)}${options.required ? ' *' : ''}</span><select data-path="${path}" ${required}>${options.values.map(item => { const [optionValue, optionLabel] = Array.isArray(item) ? item : [item, item]; return `<option value="${escapeHtml(optionValue)}" ${String(value) === String(optionValue) ? 'selected' : ''}>${escapeHtml(optionLabel)}</option>` }).join('')}</select>${help}</label>`
+  if (options.type === 'textarea') return `<label class="field"><span>${escapeHtml(label)}</span><textarea data-path="${path}" rows="3">${escapeHtml(value)}</textarea>${help}</label>`
   return `<label class="field"><span>${escapeHtml(label)}${options.required ? ' *' : ''}</span><input data-path="${path}" type="${options.type || 'text'}" value="${escapeHtml(value)}" ${required}>${help}</label>`
 }
 
@@ -68,25 +74,36 @@ function renderModules() {
 }
 
 function renderLanguage() {
-  return `<header class="step-heading"><span>Identity</span><h2>Brand and business language</h2><p>${STEPS[2].help}</p></header><div class="form-grid">${field('branding.primaryColor','Primary colour',{type:'color'})}${field('branding.accentColor','Accent colour',{type:'color'})}${field('branding.colorMode','Default theme',{type:'select',values:[['light','Light'],['dark','Dark']]})}${field('branding.typography','Typography',{type:'select',values:[['system','System'],['sans','Sans serif'],['serif','Serif'],['mono','Monospace']]})}${field('terminology.jobs','Jobs are called')}${field('terminology.candidates','Candidates are called')}${field('terminology.recruiters','Recruiters are called')}${field('terminology.clients','Clients are called')}${field('terminology.hires','Successful hires are called')}</div>`
+  return `<header class="step-heading"><span>Identity</span><h2>Brand and business language</h2><p>${STEPS[2].help}</p></header><div class="form-grid">${field('branding.primaryColor','Primary colour',{type:'color'})}${field('branding.accentColor','Accent colour',{type:'color'})}${field('branding.colorMode','Default theme',{type:'select',values:[['light','Light'],['dark','Dark']]})}${field('branding.typography','Typography',{type:'select',values:[['system','System'],['sans','Sans serif'],['serif','Serif'],['mono','Monospace']]})}${field('terminology.jobs','Jobs are called')}${field('terminology.candidates','Candidates are called')}${field('terminology.recruiters','Recruiters are called')}${field('terminology.clients','Clients are called')}${field('terminology.hires','Successful hires are called')}</div><details class="setup-disclosure"><summary>Careers identity and welcome message <span>Public candidate experience</span></summary><div class="form-grid">${field('branding.careersLogo','Careers logo URL',{help:'Use an HTTPS image URL or an asset path available in your workspace.'})}${field('careers.copy.eyebrow','Careers label')}${field('careers.headline','Careers headline')}${field('careers.intro','Welcome message',{type:'textarea'})}${field('careers.copy.apply','Apply button label')}${field('careers.copy.submit','Application submit label')}</div><button type="button" class="button secondary" data-show-preview="careers">Preview careers site</button></details>`
 }
 
 function renderRegional() {
-  return `<header class="step-heading"><span>Regional defaults</span><h2>Formats and working time</h2><p>${STEPS[3].help}</p></header><div class="form-grid">${field('regional.currency','Currency',{type:'select',values:['USD','INR','EUR','GBP','CAD','AUD','SGD']})}${field('regional.timezone','IANA time zone',{required:true,help:'Examples: Asia/Kolkata, Europe/London, America/New_York.'})}${field('regional.dateFormat','Date format',{type:'select',values:['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD']})}${field('regional.timeFormat','Time format',{type:'select',values:[['12h','12 hour'],['24h','24 hour']]})}${field('regional.language','Language code',{required:true})}${field('regional.numberLocale','Number locale',{required:true})}${field('regional.workingHours.start','Workday starts',{type:'time'})}${field('regional.workingHours.end','Workday ends',{type:'time'})}</div>`
+  return `<header class="step-heading"><span>Regional defaults</span><h2>Formats and working time</h2><p>${STEPS[3].help}</p></header><div class="form-grid">${field('regional.currency','Currency',{type:'select',values:['USD','INR','EUR','GBP','CAD','AUD','SGD']})}${field('regional.timezone','Time zone',{required:true,help:'Examples: Asia/Kolkata, Europe/London, America/New_York.'})}${field('regional.dateFormat','Date format',{type:'select',values:['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD']})}${field('regional.timeFormat','Time format',{type:'select',values:[['12h','12 hour'],['24h','24 hour']]})}${field('regional.language','Language code',{required:true})}${field('regional.numberLocale','Number locale',{required:true})}${field('regional.salaryUnit','Salary period',{type:'select',values:['year','month','hour']})}${field('regional.workingHours.start','Workday starts',{type:'time'})}${field('regional.workingHours.end','Workday ends',{type:'time'})}</div><fieldset class="workdays"><legend>Working days</legend><p>Used when evaluating stage aging and SLA deadlines.</p>${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,index) => `<label><input type="checkbox" data-workday="${index}" ${(config.regional.workingDays || []).includes(index) ? 'checked' : ''}>${day}</label>`).join('')}</fieldset>`
 }
 
 function pipelineStageNames() {
-  return (config.pipelines?.[0]?.stages || []).map(stage => stage.name).join(', ')
+  return (selectedPipeline(config)?.stages || []).map(stage => stage.name).join(' → ')
 }
 
 function renderHiring() {
-  const workflows = config.approvalWorkflows || []
-  const requisitionWorkflow = workflows.find(item => item.module === 'requisitions')
-  const offerWorkflow = workflows.find(item => item.module === 'offers')
+  const pipeline = selectedPipeline(config, selectedPipelineId)
+  selectedPipelineId = pipeline?.id || ''
+  const pipelineIndex = (config.pipelines || []).indexOf(pipeline)
   return `<header class="step-heading"><span>Operating model</span><h2>Default hiring workflow</h2><p>${STEPS[4].help}</p></header>
-    <div class="field full"><span>Default pipeline stages</span><input id="pipeline-stages" value="${escapeHtml(pipelineStageNames())}"><small>Comma-separated, in working order. Keep rejected and withdrawn states if your team uses them.</small></div>
-    <div class="form-grid"><label class="field"><span>Hiring-request approval</span><select id="requisition-approval"><option value="none" ${!requisitionWorkflow ? 'selected' : ''}>No approval</option><option value="single" ${requisitionWorkflow?.steps?.length === 1 ? 'selected' : ''}>One approver</option><option value="sequential" ${requisitionWorkflow?.steps?.length > 1 ? 'selected' : ''}>Sequential approval</option></select></label><label class="field"><span>Offer approval</span><select id="offer-approval"><option value="none" ${!offerWorkflow ? 'selected' : ''}>No approval</option><option value="single" ${offerWorkflow?.steps?.length === 1 ? 'selected' : ''}>HR approval</option><option value="sequential" ${offerWorkflow?.steps?.length > 1 ? 'selected' : ''}>HR then leadership</option></select></label></div>
-    <div class="workflow-note"><strong>Still editable after generation</strong><p>Department-specific pipelines, scorecards, roles, forms and automation rules can be refined inside the generated ATS settings.</p></div>`
+    <section class="workflow-editor" aria-label="Hiring pipeline editor"><div class="workflow-editor-heading"><div><h3>Your hiring journey</h3><p>Rename stages without changing their identity or permissions.</p></div><span class="count-badge">${pipeline?.stages?.length || 0} stages</span></div>
+    <label class="field"><span>Pipeline</span><select id="pipeline-selector">${(config.pipelines || []).map(item => `<option value="${escapeHtml(item.id)}" ${item.id === selectedPipelineId ? 'selected' : ''}>${escapeHtml(item.name)}${item.default ? ' · Default' : ''}</option>`).join('')}</select></label>
+    ${pipeline ? `<div class="pipeline-stage-list">${pipeline.stages.map((stage,index) => `<article class="pipeline-stage"><span class="stage-order" aria-hidden="true">${index + 1}</span><label class="field"><span>Stage ${index + 1} name</span><input data-path="pipelines.${pipelineIndex}.stages.${index}.name" value="${escapeHtml(stage.name)}" required></label><div class="stage-actions"><button type="button" class="stage-action" aria-label="Move ${escapeHtml(stage.name)} up" data-stage-up="${index}" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" class="stage-action" aria-label="Move ${escapeHtml(stage.name)} down" data-stage-down="${index}" ${index === pipeline.stages.length - 1 ? 'disabled' : ''}>↓</button><button type="button" class="stage-action danger" aria-label="Remove ${escapeHtml(stage.name)}" data-stage-remove="${escapeHtml(stage.id)}" ${pipeline.stages.length === 1 ? 'disabled' : ''}>×</button></div><details class="stage-rules"><summary>Stage rules <span>${(stage.allowedRoles || []).length} roles · ${(stage.requires || []).length} requirements</span></summary><fieldset><legend>Who may move an application here?</legend>${(config.roles || []).map(role => `<label><input type="checkbox" data-stage-role="${escapeHtml(role.id)}" data-stage-index="${index}" ${(stage.allowedRoles || []).includes(role.id) ? 'checked' : ''}>${escapeHtml(role.name)}</label>`).join('')}</fieldset><fieldset><legend>Required before entering</legend>${[...new Set(['interview','feedback','approval',...(stage.requires || [])])].map(requirement => `<label><input type="checkbox" data-stage-requirement="${escapeHtml(requirement)}" data-stage-index="${index}" ${(stage.requires || []).includes(requirement) ? 'checked' : ''}>${escapeHtml(humanizePreview(requirement))}</label>`).join('')}</fieldset></details></article>`).join('')}</div><button type="button" id="add-pipeline-stage" class="button secondary">+ Add stage</button>
+    <details class="setup-disclosure"><summary>Allowed stage moves <span>${(pipeline.transitions || []).length} configured</span></summary><p class="editor-help">Display order does not change allowed moves. Choose the moves your team can make, including rejection, withdrawal or reopening.</p><div class="transition-list">${(pipeline.transitions || []).map((transition,index) => `<div><span>${escapeHtml(pipeline.stages.find(stage => stage.id === transition.from)?.name || transition.from)} <b aria-hidden="true">→</b> ${escapeHtml(pipeline.stages.find(stage => stage.id === transition.to)?.name || transition.to)}</span><button type="button" class="stage-action danger" data-transition-remove="${index}" aria-label="Remove move ${escapeHtml(transition.from)} to ${escapeHtml(transition.to)}">×</button></div>`).join('')}</div><div class="transition-create"><label class="field"><span>From stage</span><select id="transition-from">${pipeline.stages.map(stage => `<option value="${escapeHtml(stage.id)}">${escapeHtml(stage.name)}</option>`).join('')}</select></label><label class="field"><span>To stage</span><select id="transition-to">${pipeline.stages.map((stage,index) => `<option value="${escapeHtml(stage.id)}" ${index === 1 ? 'selected' : ''}>${escapeHtml(stage.name)}</option>`).join('')}</select></label><button type="button" id="add-transition" class="button secondary">Add move</button></div></details>` : '<p>No pipeline configured. Import a valid configuration or select a preset.</p>'}</section>
+    <details class="setup-disclosure"><summary>Approval decisions <span>Requests and offers</span></summary>${renderApproval('requisitions', 'Hiring-request approval')}${renderApproval('offers', 'Offer approval')}</details>
+    <div class="workflow-note"><strong>Refine the rest in Settings</strong><p>Application forms, roles, scorecards and interview plans stay editable in the generated ATS. This draft preserves all additional pipelines and approval definitions.</p></div>`
+}
+
+function renderApproval(module, label) {
+  const workflow = approvalFor(config, module)
+  const mode = !workflow ? 'none' : workflow.sequential === false ? 'parallel' : workflow.steps.length === 1 ? 'single' : 'sequential'
+  const roles = approvalRoles(config, module)
+  const workflowIndex = (config.approvalWorkflows || []).indexOf(workflow)
+  return `<section class="approval-setup"><label class="field"><span>${escapeHtml(label)}${config.modules[module] ? '' : ' · Module disabled'}</span><select data-approval-mode="${module}">${[['none','No approval'],['single','One approver'],['sequential','Approvers in order'],['parallel','All approvers in parallel']].map(([value,title]) => `<option value="${value}" ${mode === value ? 'selected' : ''}>${title}</option>`).join('')}</select></label>${workflow ? `<ol class="approval-chain">${workflow.steps.map((step,index) => `<li><label class="field"><span>${mode === 'parallel' ? 'Approver' : 'Step'} ${index + 1}</span><select data-path="approvalWorkflows.${workflowIndex}.steps.${index}.roleId">${roles.map(role => `<option value="${escapeHtml(role.id)}" ${step.roleId === role.id ? 'selected' : ''}>${escapeHtml(role.name)}</option>`).join('')}</select></label></li>`).join('')}</ol>` : '<p class="editor-help">Records can proceed without an approval chain.</p>'}</section>`
 }
 
 function reviewWarnings() {
@@ -109,11 +126,11 @@ function renderReview() {
 }
 
 function renderStep() {
-  $('#steps').innerHTML = STEPS.map((step,index) => `<button type="button" data-step="${index}" class="${index === stepIndex ? 'is-active' : ''} ${index < stepIndex ? 'is-complete' : ''}"><i>${index < stepIndex ? '✓' : index + 1}</i><span><strong>${step.title}</strong><small>${index < stepIndex ? 'Complete' : index === stepIndex ? 'In progress' : 'Not started'}</small></span></button>`).join('')
+  $('#steps').innerHTML = STEPS.map((step,index) => `<button type="button" data-step="${index}" ${index === stepIndex ? 'aria-current="step"' : ''} class="${index === stepIndex ? 'is-active' : ''} ${reviewedSteps.has(index) ? 'is-complete' : ''}"><i>${reviewedSteps.has(index) ? '✓' : index + 1}</i><span><strong>${step.title}</strong><small>${index === stepIndex ? 'In progress' : reviewedSteps.has(index) ? 'Reviewed' : 'Not reviewed'}</small></span></button>`).join('')
   $('#step-content').innerHTML = [renderCompany,renderModules,renderLanguage,renderRegional,renderHiring,renderReview][stepIndex]()
   $('#progress-label').textContent = `Step ${stepIndex + 1} of ${STEPS.length}`
-  const percent = Math.round((stepIndex + 1) / STEPS.length * 100)
-  $('#progress-percent').textContent = `${percent}% complete`
+  const percent = Math.round(reviewedSteps.size / (STEPS.length - 1) * 100)
+  $('#progress-percent').textContent = `${reviewedSteps.size} of 5 reviewed`
   $('#progress-bar').style.width = `${percent}%`
   $('#back').disabled = stepIndex === 0
   $('#next').textContent = stepIndex === STEPS.length - 1 ? 'Validate & generate ATS' : 'Continue'
@@ -125,21 +142,64 @@ function renderStep() {
 function bindStep() {
   document.querySelectorAll('[data-path]').forEach(control => {
     const update = () => {
-      set(control.dataset.path, control.type === 'checkbox' ? control.checked : control.value)
+      const value = control.type === 'checkbox' ? control.checked : control.type === 'number' && control.value !== '' ? Number(control.value) : control.value
+      if (control.dataset.path.startsWith('modules.')) {
+        try { config = setModule(config, control.dataset.path.split('.')[1], value) }
+        catch (error) { control.checked = !value; showStatus(error.message, 'error'); return }
+      } else set(control.dataset.path, value)
       if (control.dataset.path === 'company.name' && !get('company.slug')) set('company.slug', slugify(control.value))
+      reviewedSteps.delete(stepIndex)
       if (stepIndex === 1) renderStep()
       else renderPreview()
     }
     const eventName = control.matches('select') || control.type === 'checkbox' ? 'change' : 'input'
     control.addEventListener(eventName, update)
   })
-  $('#pipeline-stages')?.addEventListener('input', () => { updatePipeline($('#pipeline-stages').value); renderPreview() })
-  $('#requisition-approval')?.addEventListener('change', () => { updateWorkflow('requisitions', $('#requisition-approval').value); renderPreview() })
-  $('#offer-approval')?.addEventListener('change', () => { updateWorkflow('offers', $('#offer-approval').value); renderPreview() })
-  document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => loadPreset(button.dataset.preset, true)))
-  document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => { collectStep(); stepIndex = Number(button.dataset.step); showStatus(''); renderStep() }))
-  $('#apply-json')?.addEventListener('click', () => {
-    try { config = JSON.parse($('#advanced-json').value); showStatus('Advanced JSON applied to this draft.', 'success'); renderStep() }
+  $('#pipeline-selector')?.addEventListener('change', event => { selectedPipelineId = event.target.value; selectedPreviewVariant = selectedPipelineId; renderStep() })
+  const changePipeline = edit => {
+    try { config = editPipeline(config, selectedPipelineId, edit); reviewedSteps.delete(4); renderStep() }
+    catch (error) { showStatus(error.message, 'error') }
+  }
+  $('#add-pipeline-stage')?.addEventListener('click', () => changePipeline(pipeline => ({ ...pipeline, stages: [...pipeline.stages, newStage(pipeline, config.roles)] })))
+  document.querySelectorAll('[data-stage-up]').forEach(button => button.addEventListener('click', () => changePipeline(pipeline => reorderStage(pipeline, Number(button.dataset.stageUp), -1))))
+  document.querySelectorAll('[data-stage-down]').forEach(button => button.addEventListener('click', () => changePipeline(pipeline => reorderStage(pipeline, Number(button.dataset.stageDown), 1))))
+  document.querySelectorAll('[data-stage-remove]').forEach(button => button.addEventListener('click', () => {
+    if (window.confirm('Remove this stage and its allowed moves from the draft?')) changePipeline(pipeline => removeStage(pipeline, button.dataset.stageRemove))
+  }))
+  document.querySelectorAll('[data-stage-role], [data-stage-requirement]').forEach(control => control.addEventListener('change', () => {
+    const property = control.dataset.stageRole ? 'allowedRoles' : 'requires'
+    const value = control.dataset.stageRole || control.dataset.stageRequirement
+    changePipeline(pipeline => {
+      const stage = pipeline.stages[Number(control.dataset.stageIndex)]
+      const values = new Set(stage[property] || [])
+      if (control.checked) values.add(value); else values.delete(value)
+      stage[property] = [...values]
+      return pipeline
+    })
+  }))
+  document.querySelectorAll('[data-transition-remove]').forEach(button => button.addEventListener('click', () => changePipeline(pipeline => ({ ...pipeline, transitions: pipeline.transitions.filter((_,index) => index !== Number(button.dataset.transitionRemove)) }))))
+  $('#add-transition')?.addEventListener('click', () => {
+    const from = $('#transition-from').value, to = $('#transition-to').value
+    if (from === to) return showStatus('Choose two different stages.', 'error')
+    changePipeline(pipeline => {
+      if (pipeline.transitions.some(item => item.from === from && item.to === to)) throw new Error('That move is already allowed.')
+      return { ...pipeline, transitions: [...pipeline.transitions, { from, to }] }
+    })
+  })
+  document.querySelectorAll('[data-approval-mode]').forEach(control => control.addEventListener('change', () => {
+    try { config = setApprovalMode(config, control.dataset.approvalMode, control.value); reviewedSteps.delete(4); renderStep() }
+    catch (error) { showStatus(error.message, 'error') }
+  }))
+  document.querySelectorAll('[data-workday]').forEach(control => control.addEventListener('change', () => {
+    set('regional.workingDays', [...document.querySelectorAll('[data-workday]:checked')].map(item => Number(item.dataset.workday)))
+    reviewedSteps.delete(3)
+    renderPreview()
+  }))
+  document.querySelectorAll('[data-show-preview]').forEach(button => button.addEventListener('click', () => { selectedPreviewPage = button.dataset.showPreview; renderPreview() }))
+  document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => loadPreset(button.dataset.preset, true).catch(error => showStatus(error.message, 'error'))))
+  document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => { const error = validateCurrentStep(); if (error) return showStatus(error,'error'); if (stepIndex < 5) reviewedSteps.add(stepIndex); stepIndex = Number(button.dataset.step); showStatus(''); renderStep() }))
+  $('#apply-json')?.addEventListener('click', async () => {
+    try { config = await normalizeImported(JSON.parse($('#advanced-json').value)); reviewedSteps.clear(); showStatus('Advanced JSON applied to this draft.', 'success'); renderStep() }
     catch (error) { showStatus(`Configuration JSON is not valid: ${error.message}`, 'error') }
   })
 }
@@ -211,7 +271,7 @@ function renderPreview() {
     candidates: Boolean(modules.candidates ?? true),
     pipeline: Boolean(modules.applications ?? true),
   }
-  const page = requested === 'careers' && !normalized.careers ? 'dashboard' : requested
+  const page = requested
   const dark = get('branding.colorMode') === 'dark'
   const primary = safeColor(get('branding.primaryColor'), '#2347c5')
   const accent = safeColor(get('branding.accentColor'), '#13a88a')
@@ -225,11 +285,13 @@ function renderPreview() {
   const today = formatPreviewDate(dateFormat, timeZone)
   const sampleTime = formatPreviewTime(get('regional.timeFormat') || '24h', timeZone)
   const safeCurrency = validCurrency(currency)
-  const money = new Intl.NumberFormat('en', { style:'currency', currency:safeCurrency, maximumFractionDigits:0 }).format(safeCurrency === 'INR' ? 1850000 : 85000)
+  let locale = get('regional.numberLocale') || get('regional.language') || 'en-US'
+  try { new Intl.NumberFormat(locale) } catch { locale = 'en-US' }
+  const money = new Intl.NumberFormat(locale, { style:'currency', currency:safeCurrency, maximumFractionDigits:0 }).format(safeCurrency === 'INR' ? 1850000 : 85000)
   const nav = [
     ['dashboard', 'Overview', true], ['jobs', terms.jobs, normalized.jobs], ['candidates', terms.candidates, normalized.candidates],
     ['candidateProfile', `${terms.candidates.replace(/s$/i, '')} profile`, normalized.candidates], ['pipeline', 'Pipeline', normalized.pipeline], ['application', 'Application forms', normalized.careers], ['requisitions', 'Hiring requests', modules.requisitions],
-    ['scorecards', 'Scorecards', true], ['offers', 'Offers', modules.offers], ['onboarding', 'Onboarding', modules.onboarding],
+    ['scorecards', 'Scorecards', modules.interviews], ['offers', 'Offers', modules.offers], ['onboarding', 'Onboarding', modules.onboarding],
     ['communications', 'Communications', true],
     ['referrals', 'Referrals', modules.referrals], ['talentCrm', 'Talent pools', modules.talentCrm],
     ['workforcePlanning', 'Workforce plan', modules.workforcePlanning], ['automation', 'Automations', modules.automation],
@@ -238,7 +300,8 @@ function renderPreview() {
   const titles = { dashboard:'Hiring overview', jobs:terms.jobs, application:'Application form', candidates:terms.candidates, candidateProfile:`${terms.candidates.replace(/s$/i, '')} profile`, pipeline:'Hiring pipeline', careers:`Careers at ${company}`, requisitions:'Hiring requests', scorecards:'Interview scorecards', offers:'Offers', onboarding:'Onboarding', communications:'Communications', referrals:'Employee referrals', talentCrm:'Talent pools', workforcePlanning:'Workforce plan', automation:'Automation rules', clients:terms.clients, submissions:'Candidate submissions', placements:'Placements', invoices:'Invoices' }
   const activeLabel = titles[page] || titles.dashboard
   const variant = selectPreviewVariant(page)
-  const content = previewContent(page, { terms, currency, money, today, dateFormat, timeZone, company, accent, sampleTime, variant })
+  const moduleForPage = { dashboard:'dashboard', jobs:'jobs', candidates:'candidates', candidateProfile:'candidates', pipeline:'applications', application:'careers', careers:'careers', scorecards:'interviews', requisitions:'requisitions', offers:'offers', onboarding:'onboarding', referrals:'referrals', talentCrm:'talentCrm', workforcePlanning:'workforcePlanning', automation:'automation', clients:'agency', submissions:'agency', placements:'agency', invoices:'invoices' }[page]
+  const content = moduleForPage && modules[moduleForPage] === false ? `<div class="mock-empty mock-empty-large"><strong>${escapeHtml(activeLabel)} is disabled</strong><span>Enable the module to include this page in the generated ATS.</span></div>` : previewContent(page, { terms, currency, money, today, dateFormat, timeZone, company, accent, sampleTime, variant })
   node.dataset.page = page
   node.style.setProperty('--preview-primary', primary)
   node.style.setProperty('--preview-accent', accent)
@@ -280,11 +343,18 @@ function formatPreviewTime(format, zone) {
 
 function previewContent(page, data) {
   const { terms, money, today, timeZone, company, sampleTime, variant } = data
-  if (page === 'careers') return `<section class="career-hero"><small>CAREERS · ${escapeHtml(company.toUpperCase())}</small><h4>Do work that moves people forward.</h4><p>Find a role where your next chapter can start.</p><span class="mock-add">Explore open roles</span></section><div class="mock-list"><strong>Featured opportunities</strong><article><span><b>Senior Product Designer</b><small>Product · Hybrid</small></span><span>Patiala</span></article><article><span><b>Talent Acquisition Partner</b><small>People · Full-time</small></span><span>Remote</span></article></div>`
+  if (page === 'careers') {
+    const copy = resolveCareersCopy(config.careers)
+    const logo = safeCareersAssetUrl(config.branding?.careersLogo || config.branding?.logo)
+    const headline = config.careers?.copy?.headline || config.careers?.headline || copy.headline
+    const intro = config.careers?.copy?.intro || config.careers?.intro || copy.intro
+    return `<section class="career-hero">${logo ? `<img class="preview-careers-logo" src="${escapeHtml(logo)}" alt="${escapeHtml(company)} logo">` : ''}<small>${escapeHtml(copy.eyebrow)} · ${escapeHtml(company)}</small><h4>${escapeHtml(headline)}</h4><p>${escapeHtml(intro)}</p><span class="mock-add">${escapeHtml(copy.apply)}</span></section><div class="mock-list"><strong>${escapeHtml(terms.jobs)}</strong><article><span><b>Senior Product Designer</b><small>Product · ${escapeHtml(config.employmentTypes?.find(type => type.enabled)?.label || 'Full-time')}</small></span><span>Remote</span></article></div><p class="preview-privacy">${escapeHtml(config.careers?.footer || copy.privacyFooter)}</p>`
+  }
   if (page === 'pipeline') {
-    const stages = config.pipelines?.[0]?.stages || []
+    const pipeline = variant || selectedPipeline(config, selectedPipelineId)
+    const stages = pipeline?.stages || []
     const names = stages.length ? stages.map(stage => stage.name) : ['Applied','Screening','Interview','Offer','Hired']
-    return `<div class="mock-pipeline-meta"><span>${escapeHtml(config.pipelines?.[0]?.name || 'General hiring')}</span><span>${names.length} stages</span></div><div class="mock-kanban">${names.slice(0,5).map((stage,index) => `<article><div><strong>${escapeHtml(stage)}</strong><i>${[12,8,5,3,2][index] || 1}</i></div><small>${['Maya Chen','Arjun Mehta','Sam Rivera','Priya Shah','Alex Morgan'][index]}</small><small>${index < names.length - 1 ? 'Updated recently' : 'Ready for next step'}</small></article>`).join('')}</div><div class="mock-approval"><span>Approvals</span><b>${(config.approvalWorkflows || []).length ? `${(config.approvalWorkflows || []).length} workflow${config.approvalWorkflows.length === 1 ? '' : 's'} configured` : 'No approval steps configured'}</b></div>`
+    return `<div class="mock-pipeline-meta"><span>${escapeHtml(pipeline?.name || 'General hiring')}</span><span>${names.length} stages</span></div><div class="mock-kanban">${names.map((stage,index) => `<article><div><strong>${escapeHtml(stage)}</strong><i>${[12,8,5,3,2][index] || 0}</i></div><small>${['Maya Chen','Arjun Mehta','Sam Rivera','Priya Shah','Alex Morgan'][index] || 'No sample records'}</small><small>${index < names.length - 1 ? 'Updated recently' : 'Ready for next step'}</small></article>`).join('')}</div><div class="mock-approval"><span>Allowed moves</span><b>${(pipeline?.transitions || []).length} configured</b></div>`
   }
   if (page === 'jobs' || page === 'candidates') {
     const isJobs = page === 'jobs'
@@ -295,7 +365,7 @@ function previewContent(page, data) {
     const sections = form.sections || []
     return `<div class="mock-form"><div class="mock-form-title"><strong>${escapeHtml(form.name || 'Application form')}</strong><small>${escapeHtml(form.language || 'en').toUpperCase()} · ${sections.length} section${sections.length === 1 ? '' : 's'}</small></div>${sections.map(section => `<section><h4>${escapeHtml(section.title || section.name || 'Questions')}</h4>${(section.fields || []).map(field => `<label><span>${escapeHtml(field.label || field.field || field.key)}${field.required ? ' *' : ''}</span><i>${escapeHtml(humanizePreview(field.type || 'short text'))}</i></label>`).join('') || '<small>No fields configured</small>'}</section>`).join('') || '<div class="mock-empty">No application sections configured.</div>'}<button type="button">${escapeHtml(config.careers?.copy?.submit || 'Submit application')}</button></div>`
   }
-  if (page === 'candidateProfile') return `<div class="mock-profile"><div class="mock-profile-head"><i>MC</i><span><strong>Maya Chen</strong><small>Product Designer · Active</small></span></div><div class="mock-profile-grid"><article><small>CONTACT</small><b>maya@example.test</b><span>+1 555 010 2040</span></article><article><small>CURRENT STAGE</small><b>Panel interview</b><span>Updated ${escapeHtml(today)}</span></article><article><small>OWNER</small><b>${escapeHtml(terms.recruiters.replace(/s$/i,''))}</b><span>Talent team</span></article><article><small>CONSENT</small><b>Granted</b><span>Retention policy active</span></article></div><div class="mock-activity"><strong>Profile sections</strong>${Object.keys(config.customFields?.candidates || {}).length ? Object.keys(config.customFields.candidates).map(key => `<span>${escapeHtml(humanizePreview(key))}</span>`).join('') : '<span>Experience</span><span>Skills</span><span>Documents</span><span>Activity</span>'}</div></div>`
+  if (page === 'candidateProfile') return `<div class="mock-profile"><div class="mock-profile-head"><i>MC</i><span><strong>Maya Chen</strong><small>Product Designer · Active</small></span></div><div class="mock-profile-grid"><article><small>CONTACT</small><b>maya@example.test</b><span>+1 555 010 2040</span></article><article><small>CURRENT STAGE</small><b>${escapeHtml(selectedPipeline(config)?.stages?.[0]?.name || 'Applied')}</b><span>Updated ${escapeHtml(today)}</span></article><article><small>OWNER</small><b>${escapeHtml(terms.recruiters.replace(/s$/i,''))}</b><span>Talent team</span></article><article><small>CONSENT</small><b>Granted</b><span>${escapeHtml(config.privacy?.retentionDays || 365)}-day retention review</span></article></div><div class="mock-activity"><strong>Profile fields</strong>${(config.customFields?.candidates || []).length ? config.customFields.candidates.map(field => `<span>${escapeHtml(field.label || field.id || field.key)}</span>`).join('') : '<span>Experience</span><span>Skills</span><span>Documents</span><span>Activity</span>'}</div></div>`
   if (page === 'scorecards') {
     const scorecard = variant || config.scorecards?.[0] || { name:'Interview scorecard', competencies:[] }
     return `<div class="mock-scorecard"><div><strong>${escapeHtml(scorecard.name || 'Interview scorecard')}</strong><small>${scorecard.mandatoryFeedback ? 'Feedback required before completion' : 'Draft feedback may be saved'}</small></div>${(scorecard.competencies || []).map((item, index) => `<article><span><b>${escapeHtml(item.name || item.label || `Competency ${index + 1}`)}</b><small>Weight ${escapeHtml(item.weight ?? 1)}${item.required ? ' · Required' : ''}</small></span><i>${Array.from({length: Number(scorecard.ratingScale?.max || 5)}, (_, rating) => `<em>${rating + 1}</em>`).join('')}</i></article>`).join('') || '<div class="mock-empty">No competencies configured.</div>'}<footer><span>Recommendation</span><b>${escapeHtml((scorecard.recommendations || ['Yes']).map(humanizePreview).join(' · '))}</b></footer></div>`
@@ -355,37 +425,7 @@ $('#preview-frame')?.addEventListener('click', event => {
 })
 
 function collectStep() {
-  document.querySelectorAll('[data-path]').forEach(control => set(control.dataset.path, control.type === 'checkbox' ? control.checked : control.value))
-  if (stepIndex === 4) {
-    updatePipeline($('#pipeline-stages')?.value || '')
-    updateWorkflow('requisitions', $('#requisition-approval')?.value || 'none')
-    updateWorkflow('offers', $('#offer-approval')?.value || 'none')
-  }
-}
-
-function updatePipeline(value) {
-  const names = [...new Set(value.split(',').map(item => item.trim()).filter(Boolean))]
-  const previous = config.pipelines?.[0] || { id:'general', name:'General Hiring', category:'general', default:true }
-  if (!names.length) {
-    config.pipelines = [{ ...previous, stages:[], transitions:[] }]
-    return
-  }
-  const oldByName = new Map((previous.stages || []).map(stage => [stage.name.toLowerCase(), stage]))
-  const stages = names.map(name => oldByName.get(name.toLowerCase()) || { id: slugify(name), name, required: !['rejected','withdrawn','on hold'].includes(name.toLowerCase()), requires: [], allowedRoles: ['admin','hr-head','recruiter'] })
-  const terminal = new Set(['rejected','withdrawn','on-hold','on hold'])
-  const active = stages.filter(stage => !terminal.has(stage.id) && !terminal.has(stage.name.toLowerCase()))
-  const transitions = active.slice(0,-1).map((stage,index) => ({ from: stage.id, to: active[index + 1].id }))
-  for (const stage of active.slice(0,-1)) for (const end of stages.filter(item => terminal.has(item.id) || terminal.has(item.name.toLowerCase()))) transitions.push({ from: stage.id, to: end.id })
-  config.pipelines = [{ ...previous, stages, transitions }]
-}
-
-function updateWorkflow(module, mode) {
-  config.approvalWorkflows ??= []
-  config.approvalWorkflows = config.approvalWorkflows.filter(item => item.module !== module)
-  if (mode === 'none') return
-  const singleRole = module === 'offers' ? 'hr-head' : 'hiring-manager'
-  const steps = mode === 'single' ? [{ roleId: singleRole }] : module === 'offers' ? [{ roleId:'hr-head' },{ roleId:'ceo' }] : [{ roleId:'hiring-manager' },{ roleId:'hr-head' }]
-  config.approvalWorkflows.push({ id:`${module}-approval`, name:`${module === 'offers' ? 'Offer' : 'Hiring request'} approval`, module, steps, threshold:null, sequential:true })
+  document.querySelectorAll('[data-path]').forEach(control => set(control.dataset.path, control.type === 'checkbox' ? control.checked : control.type === 'number' && control.value !== '' ? Number(control.value) : control.value))
 }
 
 function validateCurrentStep() {
@@ -397,7 +437,7 @@ function validateCurrentStep() {
   if (stepIndex === 3) {
     try { new Intl.DateTimeFormat('en-US', { timeZone: get('regional.timezone') }).format() } catch { return 'Enter a valid IANA time zone, such as Asia/Kolkata.' }
   }
-  if (stepIndex === 4 && !config.pipelines?.[0]?.stages?.length) return 'Add at least one pipeline stage.'
+  if (stepIndex === 4 && (config.pipelines || []).some(pipeline => !pipeline.stages?.length || pipeline.stages.some(stage => !stage.name?.trim()))) return 'Give every pipeline at least one stage and name each stage.'
   return ''
 }
 
@@ -411,6 +451,8 @@ async function loadPreset(name, confirmReplace = false) {
   presetName = name
   presetConfig = clone(payload)
   config = clone(payload)
+  selectedPipelineId = ''
+  reviewedSteps.clear()
   showStatus(`${PRESETS[name][0]} preset loaded. Everything remains editable.`, 'success')
   renderStep()
 }
@@ -447,8 +489,9 @@ async function generate() {
 
 function resetStep() {
   if (!presetConfig) return
-  const paths = { company:['company','branding'], modules:['modules'], language:['branding','terminology'], regional:['regional'], hiring:['pipelines','approvalWorkflows'] }[STEPS[stepIndex].id] || []
+  const paths = { company:['company','branding'], modules:['modules','mode','agency'], language:['branding','terminology','careers'], regional:['regional'], hiring:['pipelines','approvalWorkflows','requisitions','offers'] }[STEPS[stepIndex].id] || []
   for (const path of paths) config[path] = clone(presetConfig[path])
+  reviewedSteps.delete(stepIndex)
   showStatus('This section was reset to the selected preset.', 'success')
   renderStep()
 }
@@ -459,18 +502,25 @@ function exportConfig() {
   const link = document.createElement('a'); link.href = url; link.download = `${get('company.slug') || 'company'}.config.json`; link.click(); link.remove(); URL.revokeObjectURL(url)
 }
 
+async function normalizeImported(input) {
+  const response = await fetch('/api/normalize', { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(input) })
+  const payload = await response.json()
+  if (!response.ok || !payload.valid) throw new Error(payload.error || (payload.errors || []).join('\n') || 'Configuration could not be imported.')
+  return payload.config
+}
+
 function importConfig(file) {
   if (!file) return
   const reader = new FileReader()
-  reader.onload = () => { try { config = JSON.parse(reader.result); presetName = PRESETS[config.settings?.preset] ? config.settings.preset : config.mode === 'agency' || config.modules?.agency ? 'agency' : 'corporate'; stepIndex = 0; showStatus('Configuration imported. Review each section before generating.', 'success'); renderStep() } catch (error) { showStatus(`Could not import configuration: ${error.message}`, 'error') } }
+  reader.onload = async () => { try { const imported = await normalizeImported(JSON.parse(reader.result)); config = imported; presetName = PRESETS[config.settings?.preset] ? config.settings.preset : config.mode === 'agency' || config.modules?.agency ? 'agency' : config.mode === 'startup' ? 'startup' : 'corporate'; const response = await fetch(`/api/presets/${presetName}`); presetConfig = await response.json(); reviewedSteps.clear(); selectedPipelineId = ''; stepIndex = 0; showStatus('Configuration imported. Review each section before generating.', 'success'); renderStep() } catch (error) { showStatus(`Could not import configuration: ${error.message}`, 'error') } }
   reader.readAsText(file)
 }
 
 $('#back').addEventListener('click', () => { collectStep(); if (stepIndex > 0) stepIndex -= 1; showStatus(''); renderStep() })
-$('#next').addEventListener('click', async () => { const error = validateCurrentStep(); if (error) return showStatus(error,'error'); if (stepIndex === STEPS.length - 1) return generate(); stepIndex += 1; showStatus(''); renderStep(); window.scrollTo({ top:0, behavior:'smooth' }) })
+$('#next').addEventListener('click', async () => { const error = validateCurrentStep(); if (error) return showStatus(error,'error'); if (stepIndex === STEPS.length - 1) return generate(); reviewedSteps.add(stepIndex); stepIndex += 1; showStatus(''); renderStep(); window.scrollTo({ top:0, behavior:'smooth' }) })
 $('#reset-step').addEventListener('click', resetStep)
-$('#reset-all').addEventListener('click', () => { if (window.confirm('Reset the entire setup to the selected preset?')) { config = clone(presetConfig); stepIndex = 0; localStorage.removeItem(STORAGE_KEY); showStatus('Setup reset.', 'success'); renderStep() } })
-$('#save-draft').addEventListener('click', () => { collectStep(); localStorage.setItem(STORAGE_KEY, JSON.stringify({ presetName, config, stepIndex })); showStatus('Draft saved in this browser.', 'success') })
+$('#reset-all').addEventListener('click', () => { if (window.confirm('Reset the entire setup to the selected preset?')) { config = clone(presetConfig); stepIndex = 0; reviewedSteps.clear(); selectedPipelineId = ''; localStorage.removeItem(STORAGE_KEY); showStatus('Setup reset.', 'success'); renderStep() } })
+$('#save-draft').addEventListener('click', () => { collectStep(); localStorage.setItem(STORAGE_KEY, JSON.stringify({ presetName, config, stepIndex, reviewedSteps:[...reviewedSteps] })); showStatus('Draft saved in this browser.', 'success') })
 $('#export').addEventListener('click', exportConfig)
 $('#import-trigger').addEventListener('click', () => $('#import-file').click())
 $('#import-file').addEventListener('change', event => importConfig(event.target.files?.[0]))
@@ -478,7 +528,7 @@ $('#import-file').addEventListener('change', event => importConfig(event.target.
 async function start() {
   const saved = localStorage.getItem(STORAGE_KEY)
   if (saved) {
-    try { const draft = JSON.parse(saved); presetName = draft.presetName || 'corporate'; config = draft.config; stepIndex = Math.min(Number(draft.stepIndex) || 0, STEPS.length - 1); const response = await fetch(`/api/presets/${presetName}`); presetConfig = await response.json(); renderStep(); showStatus('Saved draft restored.', 'success'); return } catch { localStorage.removeItem(STORAGE_KEY) }
+    try { const draft = JSON.parse(saved); presetName = PRESETS[draft.presetName] ? draft.presetName : 'corporate'; config = await normalizeImported(draft.config); stepIndex = Math.max(0, Math.min(Number(draft.stepIndex) || 0, STEPS.length - 1)); reviewedSteps = new Set((draft.reviewedSteps || []).filter(index => Number.isInteger(index) && index >= 0 && index < 5)); const response = await fetch(`/api/presets/${presetName}`); presetConfig = await response.json(); renderStep(); showStatus('Saved draft restored.', 'success'); return } catch { localStorage.removeItem(STORAGE_KEY) }
   }
   await loadPreset('corporate')
 }
